@@ -43,16 +43,20 @@ class seqseg(ScriptedLoadableModule):
         self.parent.title = _("SeqSeg")
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Segmentation")]
         self.parent.dependencies = []
-        self.parent.contributors = ["Numi Sveinsson Cepero (UT Austin)"]
+        self.parent.contributors = ["Numi Sveinsson Cepero (UC Berkeley & UT Austin)"]
         # _() function marks text as translatable to other languages
         self.parent.helpText = _("""
 SeqSeg is a seed-based segmentation module that uses the SeqSeg Python package. 
-It requires two seed points and a volume as input to produce a segmentation.
-See more information in <a href="https://github.com/nsveinsson/SlicerSeqSeg">module documentation</a>.
+It requires two seed points and a volume as input to produce a segmentation, surface mesh and centerline.
+See more information in <a href="https://github.com/numisveinsson/SeqSeg">module documentation</a>.
 """)
         self.parent.acknowledgementText = _("""
-This module was developed by Numi Sveinsson Cepero at UT Austin. 
+This module was developed by Numi Sveinsson Cepero at UC Berkeley & UT Austin.
 It integrates the SeqSeg Python package for seed-based segmentation into 3D Slicer.
+See the paper <a href="https://rdcu.be/ePeZD">here</a> for more details.
+Cite: Sveinsson Cepero, N., Shadden, S.C. SeqSeg: Learning Local Segments for Automatic Vascular Model Construction. Ann Biomed Eng 53, 158–179 (2025). https://doi.org/10.1007/s10439-024-03611-z
+                                        
+                                            
 """)
 
         # Additional initialization step after application startup is complete
@@ -144,7 +148,8 @@ class seqsegParameterNode:
     maxSteps: Annotated[int, WithinRange(1, 10000)] = 10  # Max segmentation steps
     maxBranches: Annotated[int, WithinRange(1, 50)] = 2  # Max number of branches
     maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 5  # Max steps per branch
-    imageUnit: Annotated[str, Choice(["mm", "cm"])] = "cm"  # Image unit (mm or cm)
+    imageUnit: Annotated[str, Choice(["mm", "cm"])] = "mm"  # Image unit (mm or cm)
+    coordinateSystem: Annotated[str, Choice(["LPS World", "RAS World"])] = "LPS World"  # Coordinate system for seed points
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
     nnunetType: Annotated[str, Choice(["3d_fullres", "2d"])] = "3d_fullres"  # Type of nnUNet model
     trainDataset: str = "Dataset005_SEQAORTANDFEMOMR"  # Training dataset name
@@ -201,6 +206,14 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.createSeedPointsButton.connect("clicked(bool)", self.onCreateSeedPointsButton)
         self.ui.downloadWeightsButton.connect("clicked(bool)", self.onDownloadWeightsButton)
         
+        # Output visualization buttons
+        if hasattr(self.ui, 'loadSegmentationButton'):
+            self.ui.loadSegmentationButton.connect("clicked(bool)", self.onLoadSegmentationButton)
+        if hasattr(self.ui, 'loadSurfaceMeshButton'):
+            self.ui.loadSurfaceMeshButton.connect("clicked(bool)", self.onLoadSurfaceMeshButton)
+        if hasattr(self.ui, 'browseOutputsButton'):
+            self.ui.browseOutputsButton.connect("clicked(bool)", self.onBrowseOutputsButton)
+        
         # Connect output directory button to sync with parameter node
         # ctkDirectoryButton emits directoryChanged signal when directory changes
         if hasattr(self.ui.outputDirectoryButton, 'directoryChanged'):
@@ -208,11 +221,21 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # Connect nnUNet results path button to sync with parameter node
         # ctkDirectoryButton uses 'directoryChanged' signal
-        if hasattr(self.ui, 'nnunetResultsPathButton') and hasattr(self.ui.nnunetResultsPathButton, 'directoryChanged'):
-            self.ui.nnunetResultsPathButton.directoryChanged.connect(self.onNnunetResultsPathChanged)
-            logging.info("Connected nnUNet results path button signal")
+        if hasattr(self.ui, 'nnunetResultsPathButton'):
+            try:
+                # Try multiple signal connection approaches
+                if hasattr(self.ui.nnunetResultsPathButton, 'directoryChanged'):
+                    self.ui.nnunetResultsPathButton.directoryChanged.connect(self.onNnunetResultsPathChanged)
+                    logging.info("Connected nnUNet results path button directoryChanged signal")
+                elif hasattr(self.ui.nnunetResultsPathButton, 'currentPathChanged'):
+                    self.ui.nnunetResultsPathButton.currentPathChanged.connect(self.onNnunetResultsPathChanged)
+                    logging.info("Connected nnUNet results path button currentPathChanged signal")
+                else:
+                    logging.warning("No suitable signal found for nnUNet results path button")
+            except Exception as e:
+                logging.warning(f"Could not connect nnUNet results path button signal: {e}")
         else:
-            logging.warning("Could not connect nnUNet results path button signal")
+            logging.warning("nnunetResultsPathButton not found in UI")
         
         # Connect image unit combo box to sync with parameter node
         if hasattr(self.ui, 'unitComboBox') and hasattr(self.ui.unitComboBox, 'currentTextChanged'):
@@ -220,9 +243,41 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info("Connected image unit combo box signal")
         else:
             logging.warning("Could not connect image unit combo box signal")
+        
+        # Connect nnUNet type combo box to sync with parameter node
+        if hasattr(self.ui, 'nnunetTypeComboBox') and hasattr(self.ui.nnunetTypeComboBox, 'currentTextChanged'):
+            self.ui.nnunetTypeComboBox.currentTextChanged.connect(self.onNnUnetTypeChanged)
+            logging.info("Connected nnUNet type combo box signal")
+        else:
+            logging.warning("Could not connect nnUNet type combo box signal")
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
+        
+        # Initialize status updates
+        self._updateStatusMessage("Ready to run SeqSeg")
+
+    def _updateStatusMessage(self, message: str, isError: bool = False) -> None:
+        """Update the status label with current operation status."""
+        if hasattr(self.ui, 'statusLabel'):
+            self.ui.statusLabel.text = message
+            if isError:
+                self.ui.statusLabel.setStyleSheet("""
+                    QLabel {
+                        color: #D32F2F;
+                        font-style: italic;
+                        font-weight: bold;
+                        padding: 5px;
+                    }
+                """)
+            else:
+                self.ui.statusLabel.setStyleSheet("""
+                    QLabel {
+                        color: #2E7D32;
+                        font-style: italic;
+                        padding: 5px;
+                    }
+                """)
 
     def cleanup(self) -> None:
         """Called when the application closes and the module widget is destroyed."""
@@ -306,30 +361,70 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._checkCanApply()
 
     def _checkCanApply(self, caller=None, event=None) -> None:
-        # Always enable the button - let the logic handle validation
-        if self._parameterNode:
-            if self._parameterNode.inputVolume:
-                self.ui.applyButton.toolTip = _("Run SeqSeg segmentation")
-            else:
-                self.ui.applyButton.toolTip = _("Select input volume for better results")
+        """Check if we can run SeqSeg and update UI accordingly."""
+        if not self._parameterNode:
+            if hasattr(self.ui, 'applyButton'):
+                self.ui.applyButton.enabled = False
+            self._updateStatusMessage("Parameter node not initialized", isError=True)
+            return
+            
+        # Check requirements and update status
+        missing_requirements = []
+        
+        if not self._parameterNode.inputVolume:
+            missing_requirements.append("Input Volume")
+            
+        # Check if we have seed points or can create them
+        seed1Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint1) if self._parameterNode.seedPoint1 else None
+        seed2Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint2) if self._parameterNode.seedPoint2 else None
+        
+        if not seed1Node or not seed2Node:
+            if not self._parameterNode.inputVolume:
+                missing_requirements.append("Seed Points (requires volume first)")
+            # If we have volume, seeds can be auto-created
+        
+        # Update UI based on requirements
+        if missing_requirements:
+            self.ui.applyButton.text = f"Missing: {', '.join(missing_requirements)}"
+            self.ui.applyButton.enabled = False
+            self._updateStatusMessage(f"Please provide: {', '.join(missing_requirements)}")
+        else:
+            self.ui.applyButton.text = "🚀 Run SeqSeg"
             self.ui.applyButton.enabled = True
+            
+            # Check for optional improvements
+            suggestions = []
+            if not self._parameterNode.nnunetResultsPath:
+                suggestions.append("Consider downloading pretrained weights")
+            
+            if suggestions:
+                self._updateStatusMessage(f"Ready to run! Tip: {suggestions[0]}")
+            else:
+                self._updateStatusMessage("Ready to run SeqSeg - All requirements met!")
 
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
-        with slicer.util.tryWithErrorDisplay(_("Failed to compute SeqSeg results."), waitCursor=True):
-            # Get nodes from parameter node
-            inputVolume = self._parameterNode.inputVolume
-            
-            # Debug: Check if input volume is properly set
-            if not inputVolume:
-                logging.warning("No input volume selected, trying to find one...")
-                firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
-                if firstVolumeNode:
-                    inputVolume = firstVolumeNode
-                    self._parameterNode.inputVolume = firstVolumeNode
-                    logging.info(f"Using volume: {firstVolumeNode.GetName()}")
-                else:
-                    raise ValueError("No volume found in scene. Please load a volume first.")
+        
+        # Update UI for processing
+        self.ui.applyButton.enabled = False
+        self.ui.applyButton.text = "Processing..."
+        self._updateStatusMessage("Starting SeqSeg processing...")
+        
+        try:
+            with slicer.util.tryWithErrorDisplay(_("Failed to compute SeqSeg results."), waitCursor=True):
+                # Get nodes from parameter node
+                inputVolume = self._parameterNode.inputVolume
+                
+                # Debug: Check if input volume is properly set
+                if not inputVolume:
+                    logging.warning("No input volume selected, trying to find one...")
+                    firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
+                    if firstVolumeNode:
+                        inputVolume = firstVolumeNode
+                        self._parameterNode.inputVolume = firstVolumeNode
+                        logging.info(f"Using volume: {firstVolumeNode.GetName()}")
+                    else:
+                        raise ValueError("No volume found in scene. Please load a volume first.")
             
             seedPoint1Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint1)
             seedPoint2Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint2) 
@@ -346,30 +441,46 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info(f"nnUNet Results Path length: {len(nnunetResultsPath) if nnunetResultsPath else 0}")
             logging.info(f"nnUNet Results Path exists: {os.path.exists(nnunetResultsPath) if nnunetResultsPath else False}")
             
+            # Fallback: Try to get nnUNet path directly from UI if parameter node is empty
+            if not nnunetResultsPath and hasattr(self.ui, 'nnunetResultsPathButton'):
+                try:
+                    if hasattr(self.ui.nnunetResultsPathButton, 'directory'):
+                        ui_path = self.ui.nnunetResultsPathButton.directory
+                    elif hasattr(self.ui.nnunetResultsPathButton, 'currentPath'):
+                        ui_path = self.ui.nnunetResultsPathButton.currentPath
+                    else:
+                        ui_path = ""
+                    
+                    if ui_path and os.path.exists(ui_path):
+                        nnunetResultsPath = ui_path
+                        self._parameterNode.nnunetResultsPath = ui_path
+                        logging.info(f"Retrieved nnUNet path from UI: '{ui_path}'")
+                except Exception as e:
+                    logging.warning(f"Could not read nnUNet path from UI: {e}")
+            
+            # Fallback: Try to get nnUNet type directly from UI if parameter node has default/empty value
+            if hasattr(self.ui, 'nnunetTypeComboBox'):
+                try:
+                    ui_nnunet_type = self.ui.nnunetTypeComboBox.currentText
+                    if ui_nnunet_type and ui_nnunet_type != nnunetType:
+                        logging.info(f"nnUNet Type mismatch - Parameter: '{nnunetType}', UI: '{ui_nnunet_type}'")
+                        if ui_nnunet_type in ["3d_fullres", "2d"]:
+                            nnunetType = ui_nnunet_type
+                            self._parameterNode.nnunetType = ui_nnunet_type
+                            logging.info(f"Updated nnUNet Type from UI: '{ui_nnunet_type}'")
+                except Exception as e:
+                    logging.warning(f"Could not read nnUNet type from UI: {e}")
+            
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
             
-            # Try to get values directly from UI
-            try:
-                if hasattr(self.ui, 'nnunetResultsPathButton'):
-                    ui_path = getattr(self.ui.nnunetResultsPathButton, 'directory', '')
-                    logging.info(f"nnUNet Results Path from UI button: '{ui_path}'")
-                    if ui_path and not nnunetResultsPath:
-                        nnunetResultsPath = ui_path
-                        self._parameterNode.nnunetResultsPath = ui_path
-                        logging.info(f"Updated nnUNet Results Path from UI: '{nnunetResultsPath}'")
-                
-                if hasattr(self.ui, 'unitComboBox'):
-                    ui_unit = self.ui.unitComboBox.currentText()
-                    logging.info(f"Image Unit from UI combo box: '{ui_unit}'")
-                    if ui_unit and ui_unit != imageUnit:
-                        imageUnit = ui_unit
-                        self._parameterNode.imageUnit = ui_unit
-                        logging.info(f"Updated Image Unit from UI: '{imageUnit}'")
-            except Exception as e:
-                logging.warning(f"Could not get values from UI: {e}")
+            # Validate image unit - should be automatically synced via parameter binding
+            if imageUnit not in ["mm", "cm"]:
+                logging.warning(f"Invalid image unit '{imageUnit}', defaulting to 'mm'")
+                imageUnit = "mm"
+                self._parameterNode.imageUnit = "mm"
             
-            logging.info(f"nnUNet Type: '{nnunetType}'")
+            logging.info(f"nnUNet Type (final): '{nnunetType}'")
             logging.info(f"Train Dataset: '{trainDataset}'")
             logging.info(f"Fold: '{fold}'")
             outputDirectory = self._parameterNode.outputDirectory
@@ -409,10 +520,22 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             outputSegmentationNode = slicer.mrmlScene.GetNodeByID(self._parameterNode.outputSegmentation)
             
             # Run SeqSeg segmentation
+            self._updateStatusMessage("Running SeqSeg algorithm...")
             self.logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                                maxSteps, self._parameterNode.maxBranches, self._parameterNode.maxStepsPerBranch,
-                               imageUnit, nnunetResultsPath, nnunetType, trainDataset, 
+                               imageUnit, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
                                fold, outputDirectory, outputSegmentationNode)
+                                   
+            self._updateStatusMessage("SeqSeg completed successfully! Use visualization buttons to view results.")
+                
+        except Exception as e:
+            logging.error(f"SeqSeg processing failed: {e}")
+            self._updateStatusMessage(f"SeqSeg failed: {str(e)}", isError=True)
+            
+        finally:
+            # Reset button state
+            self.ui.applyButton.enabled = True
+            self._checkCanApply()  # This will set the appropriate button text
 
     def onOutputDirectoryChanged(self, directory: str) -> None:
         """Called when output directory button changes - sync with parameter node."""
@@ -435,37 +558,73 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._parameterNode.imageUnit = unit
             logging.info(f"Image Unit updated to: {unit}")
 
+    def onNnUnetTypeChanged(self, nnunet_type: str) -> None:
+        """Called when nnUNet type combo box changes - sync with parameter node."""
+        if self._parameterNode and nnunet_type:
+            self._parameterNode.nnunetType = nnunet_type
+            logging.info(f"nnUNet Type updated to: {nnunet_type}")
+
     def _syncUiWithParameterNode(self) -> None:
         """Manually sync UI controls with parameter node values."""
         if not self._parameterNode:
             return
         
-        # Sync nnUNet results path button
-        if hasattr(self.ui, 'nnunetResultsPathButton') and self._parameterNode.nnunetResultsPath:
+        # Sync nnUNet results path button (manual backup for parameter binding)
+        if hasattr(self.ui, 'nnunetResultsPathButton'):
             try:
-                # Try to set the directory on the button
+                current_path = self._parameterNode.nnunetResultsPath or ""
+                
+                # Get current UI path to avoid unnecessary updates
+                ui_path = ""
                 if hasattr(self.ui.nnunetResultsPathButton, 'directory'):
-                    self.ui.nnunetResultsPathButton.directory = self._parameterNode.nnunetResultsPath
-                elif hasattr(self.ui.nnunetResultsPathButton, 'setDirectory'):
-                    self.ui.nnunetResultsPathButton.setDirectory(self._parameterNode.nnunetResultsPath)
-                logging.info(f"Synced nnUNet path to UI: {self._parameterNode.nnunetResultsPath}")
+                    ui_path = self.ui.nnunetResultsPathButton.directory or ""
+                elif hasattr(self.ui.nnunetResultsPathButton, 'currentPath'):
+                    ui_path = self.ui.nnunetResultsPathButton.currentPath or ""
+                
+                # Only update if different to avoid circular updates
+                if current_path != ui_path:
+                    if hasattr(self.ui.nnunetResultsPathButton, 'setDirectory'):
+                        self.ui.nnunetResultsPathButton.setDirectory(current_path)
+                    elif hasattr(self.ui.nnunetResultsPathButton, 'directory'):
+                        self.ui.nnunetResultsPathButton.directory = current_path
+                    
+                    if current_path:
+                        logging.info(f"Synced nnUNet path to UI: {current_path}")
+                    
             except Exception as e:
                 logging.warning(f"Could not sync nnUNet path to UI: {e}")
         
-        # Sync image unit combo box
+        # Sync image unit combo box (backup for parameter binding)
         if hasattr(self.ui, 'unitComboBox') and self._parameterNode.imageUnit:
             try:
-                # Find the index of the current unit and set it
                 current_unit = self._parameterNode.imageUnit
                 combo_box = self.ui.unitComboBox
-                index = combo_box.findText(current_unit)
-                if index >= 0:
-                    combo_box.setCurrentIndex(index)
-                    logging.info(f"Synced image unit to UI: {current_unit}")
-                else:
-                    logging.warning(f"Image unit '{current_unit}' not found in combo box")
+                # Only update if different to avoid circular updates
+                if combo_box.currentText() != current_unit:
+                    index = combo_box.findText(current_unit)
+                    if index >= 0:
+                        combo_box.setCurrentIndex(index)
+                        logging.info(f"Synced image unit to UI: {current_unit}")
+                    else:
+                        logging.warning(f"Image unit '{current_unit}' not found in combo box options")
             except Exception as e:
                 logging.warning(f"Could not sync image unit to UI: {e}")
+        
+        # Sync nnUNet type combo box (backup for parameter binding)
+        if hasattr(self.ui, 'nnunetTypeComboBox') and self._parameterNode.nnunetType:
+            try:
+                current_type = self._parameterNode.nnunetType
+                combo_box = self.ui.nnunetTypeComboBox
+                # Only update if different to avoid circular updates
+                if combo_box.currentText() != current_type:
+                    index = combo_box.findText(current_type)
+                    if index >= 0:
+                        combo_box.setCurrentIndex(index)
+                        logging.info(f"Synced nnUNet type to UI: {current_type}")
+                    else:
+                        logging.warning(f"nnUNet type '{current_type}' not found in combo box options")
+            except Exception as e:
+                logging.warning(f"Could not sync nnUNet type to UI: {e}")
 
     def onCreateSeedPointsButton(self) -> None:
         """Create or reset default seed points when user clicks the button."""
@@ -544,21 +703,35 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         import tempfile
         import zipfile
         from pathlib import Path
-        import slicer.qt
-        from slicer.qt import QFileDialog
         
         zenodo_url = "https://zenodo.org/records/15020477/files/nnUNet_results.zip?download=1"
         default_weights_dir = os.path.join(os.path.expanduser("~"), "SeqSeg_Weights")
         
         try:
             with slicer.util.tryWithErrorDisplay(_("Failed to download pretrained weights."), waitCursor=True):
-                # Ask user for download location
-                download_dir = QFileDialog.getExistingDirectory(
-                    None,
-                    "Select directory to download pretrained weights",
-                    default_weights_dir,
-                    QFileDialog.ShowDirsOnly
-                )
+                # Ask user for download location - try different methods
+                download_dir = None
+                try:
+                    # Method 1: Try Slicer's qt module
+                    import qt
+                    download_dir = qt.QFileDialog.getExistingDirectory(
+                        None,
+                        "Select directory to download pretrained weights",
+                        default_weights_dir
+                    )
+                except ImportError:
+                    try:
+                        # Method 2: Try direct Qt import
+                        from PySide2.QtWidgets import QFileDialog
+                        download_dir = QFileDialog.getExistingDirectory(
+                            None,
+                            "Select directory to download pretrained weights",
+                            default_weights_dir
+                        )
+                    except ImportError:
+                        # Method 3: Fallback to default directory
+                        logging.warning("Could not open directory dialog, using default directory")
+                        download_dir = default_weights_dir
                 if not download_dir:
                     return  # User cancelled
                 
@@ -635,6 +808,197 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 windowTitle="Download Failed"
             )
 
+    def onLoadSegmentationButton(self) -> None:
+        """Load the latest segmentation (.mha) file from output directory."""
+        try:
+            output_dir = self._parameterNode.outputDirectory
+            if not output_dir or not os.path.exists(output_dir):
+                slicer.util.warningDisplay("Output directory not found. Please run SeqSeg first or check output directory path.")
+                return
+            
+            # Look for segmentation files in output subdirectory
+            output_subdir = os.path.join(output_dir, "output")
+            if not os.path.exists(output_subdir):
+                slicer.util.warningDisplay("No output subdirectory found. Please run SeqSeg first.")
+                return
+            
+            # Find segmentation files with common patterns
+            seg_files = []
+            for f in os.listdir(output_subdir):
+                if (f.endswith(('.mha', '.nii.gz', '.nii')) and 
+                    ('seg' in f.lower() or 'segmentation' in f.lower())):
+                    seg_files.append(f)
+            
+            if not seg_files:
+                slicer.util.warningDisplay("No segmentation files found in output directory.")
+                return
+            
+            # Use the latest file (by modification time)
+            seg_files.sort(key=lambda f: os.path.getmtime(os.path.join(output_subdir, f)), reverse=True)
+            latest_seg = os.path.join(output_subdir, seg_files[0])
+            
+            # Use the standardized loading method
+            if self._loadSegmentationFile(latest_seg, update_parameter_node=True):
+                slicer.util.infoDisplay(f"Loaded segmentation: {seg_files[0]}")
+            else:
+                slicer.util.errorDisplay("Failed to load segmentation file.")
+                
+        except Exception as e:
+            logging.error(f"Error loading segmentation: {e}")
+            slicer.util.errorDisplay(f"Error loading segmentation: {str(e)}")
+
+    def onLoadSurfaceMeshButton(self) -> None:
+        """Load the latest surface mesh (.vtp) file from output directory."""
+        try:
+            output_dir = self._parameterNode.outputDirectory
+            if not output_dir or not os.path.exists(output_dir):
+                slicer.util.warningDisplay("Output directory not found. Please run SeqSeg first or check output directory path.")
+                return
+            
+            # Look for surface mesh files in output subdirectory
+            output_subdir = os.path.join(output_dir, "output")
+            if not os.path.exists(output_subdir):
+                slicer.util.warningDisplay("No output subdirectory found. Please run SeqSeg first.")
+                return
+            
+            # Find .vtp surface mesh files
+            mesh_files = [f for f in os.listdir(output_subdir) if f.endswith('.vtp') and 'surface_mesh' in f]
+            
+            if not mesh_files:
+                slicer.util.warningDisplay("No surface mesh files found in output directory.")
+                return
+            
+            # Use the latest file (by modification time)
+            mesh_files.sort(key=lambda f: os.path.getmtime(os.path.join(output_subdir, f)), reverse=True)
+            latest_mesh = os.path.join(output_subdir, mesh_files[0])
+            
+            # Load the surface mesh
+            mesh_node = slicer.util.loadModel(latest_mesh)
+            if mesh_node:
+                slicer.util.infoDisplay(f"Loaded surface mesh: {mesh_files[0]}")
+                # Make sure it's visible in 3D view
+                mesh_node.GetDisplayNode().SetVisibility(True)
+                mesh_node.GetDisplayNode().SetColor(1, 0, 0)  # Set to red
+                mesh_node.GetDisplayNode().SetOpacity(0.8)
+            else:
+                slicer.util.errorDisplay("Failed to load surface mesh file.")
+                
+        except Exception as e:
+            logging.error(f"Error loading surface mesh: {e}")
+            slicer.util.errorDisplay(f"Error loading surface mesh: {str(e)}")
+
+    def onBrowseOutputsButton(self) -> None:
+        """Browse and select specific output files to load."""
+        try:
+            output_dir = self._parameterNode.outputDirectory
+            if not output_dir or not os.path.exists(output_dir):
+                slicer.util.warningDisplay("Output directory not found. Please run SeqSeg first or check output directory path.")
+                return
+            
+            output_subdir = os.path.join(output_dir, "output")
+            if not os.path.exists(output_subdir):
+                slicer.util.warningDisplay("No output subdirectory found. Please run SeqSeg first.")
+                return
+            
+            # Get all output files
+            all_files = os.listdir(output_subdir)
+            output_files = [f for f in all_files if f.endswith(('.mha', '.vtp', '.nii.gz', '.nii'))]
+            
+            if not output_files:
+                slicer.util.warningDisplay("No output files found in output directory.")
+                return
+            
+            # Create a simple selection dialog
+            file_list = "\n".join([f"{i+1}. {f}" for i, f in enumerate(output_files)])
+            message = f"Output files found:\n\n{file_list}\n\nAll files will be loaded automatically."
+            
+            response = slicer.util.confirmYesNoDisplay(message, windowTitle="Load Output Files")
+            if response:
+                loaded_count = 0
+                for file in output_files:
+                    file_path = os.path.join(output_subdir, file)
+                    try:
+                        if file.endswith('.vtp'):
+                            # Load as model (surface mesh)
+                            node = slicer.util.loadModel(file_path)
+                            if node:
+                                node.GetDisplayNode().SetVisibility(True)
+                                node.GetDisplayNode().SetColor(1, 0, 0)
+                                loaded_count += 1
+                        elif file.endswith(('.mha', '.nii.gz', '.nii')):
+                            # Check if it's a segmentation file and load appropriately
+                            if 'seg' in file.lower() or 'segmentation' in file.lower():
+                                # Load as segmentation using standardized method
+                                if self._loadSegmentationFile(file_path, update_parameter_node=False):
+                                    loaded_count += 1
+                            else:
+                                # Load as regular volume
+                                node = slicer.util.loadVolume(file_path)
+                                if node:
+                                    loaded_count += 1
+                    except Exception as file_error:
+                        logging.warning(f"Failed to load {file}: {file_error}")
+                
+                slicer.util.infoDisplay(f"Successfully loaded {loaded_count} of {len(output_files)} output files.")
+            
+        except Exception as e:
+            logging.error(f"Error browsing outputs: {e}")
+            slicer.util.errorDisplay(f"Error browsing outputs: {str(e)}")
+
+    def _loadSegmentationFile(self, segmentation_file_path: str, update_parameter_node: bool = True) -> bool:
+        """
+        Standardized method to load a segmentation file (.mha, .nii.gz, etc.) as a proper segmentation node.
+        
+        :param segmentation_file_path: Full path to the segmentation file
+        :param update_parameter_node: Whether to update the parameter node outputSegmentation reference
+        :return: True if successful, False otherwise
+        """
+        try:
+            if not os.path.exists(segmentation_file_path):
+                logging.error(f"Segmentation file not found: {segmentation_file_path}")
+                return False
+            
+            # Generate a descriptive name for the segmentation
+            filename = os.path.basename(segmentation_file_path)
+            segmentation_name = f"SeqSeg_Segmentation_{filename.split('.')[0]}"
+            
+            # Load the segmentation as a temporary volume first
+            temp_volume = slicer.util.loadVolume(segmentation_file_path)
+            if not temp_volume:
+                logging.error(f"Failed to load segmentation file as volume: {segmentation_file_path}")
+                return False
+            
+            # Create a new segmentation node
+            segmentation_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode", segmentation_name)
+            
+            # Set up the segmentation node properly
+            segmentation_node.CreateDefaultDisplayNodes()
+            segmentation_node.SetReferenceImageGeometryParameterFromVolumeNode(temp_volume)
+            
+            # Use the segmentations module logic to import the labelmap
+            segmentationsLogic = slicer.modules.segmentations.logic()
+            segmentationsLogic.ImportLabelmapToSegmentationNode(temp_volume, segmentation_node)
+            
+            # Remove the temporary volume node to avoid conflicts
+            slicer.mrmlScene.RemoveNode(temp_volume)
+            
+            # Set up display properties for better visualization
+            displayNode = segmentation_node.GetDisplayNode()
+            if displayNode:
+                displayNode.SetVisibility(True)
+                displayNode.SetOpacity(0.6)  # Semi-transparent overlay
+            
+            # Update the parameter node to reference this segmentation if requested
+            if update_parameter_node and self._parameterNode:
+                self._parameterNode.outputSegmentation = segmentation_node.GetID()
+            
+            logging.info(f"Successfully loaded segmentation: {segmentation_name}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error loading segmentation file {segmentation_file_path}: {e}")
+            return False
+
 
 #
 # seqsegLogic
@@ -658,7 +1022,53 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return seqsegParameterNode(super().getParameterNode())
 
-    def runSeqSeg(self, 
+    def loadSegmentationToNode(self, segmentation_file_path: str, outputSegmentationNode, inputVolume) -> bool:
+        """
+        Standardized method to load a segmentation file into an existing segmentation node.
+        
+        :param segmentation_file_path: Full path to the segmentation file
+        :param outputSegmentationNode: The segmentation node to update
+        :param inputVolume: Reference volume for geometry
+        :return: True if successful, False otherwise
+        """
+        try:
+            if not os.path.exists(segmentation_file_path):
+                logging.error(f"Segmentation file not found: {segmentation_file_path}")
+                return False
+            
+            # Load the segmentation file as a temporary volume
+            temp_segmentation_node = slicer.util.loadVolume(segmentation_file_path)
+            if not temp_segmentation_node:
+                logging.error(f"Failed to load segmentation file: {segmentation_file_path}")
+                return False
+            
+            # Convert volume to segmentation using segmentations module logic
+            import numpy as np
+            segmentationArray = slicer.util.arrayFromVolume(temp_segmentation_node)
+            segmentationArray = segmentationArray.astype(np.uint8)
+            
+            # Create or update segment in output segmentation node
+            segmentId = outputSegmentationNode.GetSegmentation().AddEmptySegment("SeqSeg_Segment")
+            
+            # Update segmentation with the loaded data
+            slicer.util.updateSegmentBinaryLabelmapFromArray(
+                segmentationArray, 
+                outputSegmentationNode, 
+                segmentId, 
+                inputVolume
+            )
+            
+            # Clean up temporary volume node
+            slicer.mrmlScene.RemoveNode(temp_segmentation_node)
+            
+            logging.info(f"Successfully loaded segmentation from: {segmentation_file_path}")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error loading segmentation file {segmentation_file_path}: {e}")
+            return False
+
+    def runSeqSeg(self,
                   inputVolume: vtkMRMLScalarVolumeNode,
                   seedPoint1Node,
                   seedPoint2Node,
@@ -667,6 +1077,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                   maxBranches: int,
                   maxStepsPerBranch: int,
                   imageUnit: str,
+                  coordinateSystem: str,
                   nnunetResultsPath: str,
                   nnunetType: str,
                   trainDataset: str,
@@ -856,7 +1267,25 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
 
             logging.info(f"Seed point 1 (RAS): {seedPoint1_RAS}")
             logging.info(f"Seed point 2 (RAS): {seedPoint2_RAS}")
+            
+            # Convert RAS (Slicer) coordinates to LPS (NIfTI/SeqSeg) coordinates
+            # RAS to LPS conversion: negate X and Y coordinates
+            seedPoint1_LPS = [-seedPoint1_RAS[0], -seedPoint1_RAS[1], seedPoint1_RAS[2]]
+            seedPoint2_LPS = [-seedPoint2_RAS[0], -seedPoint2_RAS[1], seedPoint2_RAS[2]]
+            
+            logging.info(f"Seed point 1 (LPS world): {seedPoint1_LPS}")
+            logging.info(f"Seed point 2 (LPS world): {seedPoint2_LPS}")
             logging.info(f"Radius estimate: {radiusEstimate}")
+            
+            # Choose coordinate system based on parameter
+            if coordinateSystem == "RAS World":
+                seedPoint1_final = seedPoint1_RAS
+                seedPoint2_final = seedPoint2_RAS
+                logging.info(f"Using RAS world coordinates (Slicer native)")
+            else:  # Default to "LPS World"
+                seedPoint1_final = seedPoint1_LPS
+                seedPoint2_final = seedPoint2_LPS
+                logging.info(f"Using LPS world coordinates (NIfTI standard)")
             
             # Create seeds.json file in the data_dir (same level as images/)
             # Format: [{"name": "case_name", "seeds": [[start_point], [direction_point], radius_estimate]}]
@@ -865,8 +1294,8 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                     "name": case_name,
                     "seeds": [
                         [
-                            [float(seedPoint1_RAS[0]), float(seedPoint1_RAS[1]), float(seedPoint1_RAS[2])],
-                            [float(seedPoint2_RAS[0]), float(seedPoint2_RAS[1]), float(seedPoint2_RAS[2])],
+                            [float(seedPoint1_final[0]), float(seedPoint1_final[1]), float(seedPoint1_final[2])],
+                            [float(seedPoint2_final[0]), float(seedPoint2_final[1]), float(seedPoint2_final[2])],
                             float(radiusEstimate)
                         ]
                     ]
@@ -977,31 +1406,14 @@ Output Directory: {data_dir}"""
             if not output_files:
                 raise RuntimeError(f"No output segmentation file found in {output_dir}. SeqSeg may have failed or output format changed.")
             
+            # Use the latest output file (sort by modification time)
+            output_files.sort(key=lambda f: os.path.getmtime(os.path.join(output_dir, f)), reverse=True)
             output_file = os.path.join(output_dir, output_files[0])
             logging.info(f"Found output file: {output_file}")
             
-            # Load the result back into Slicer
-            temp_segmentation_node = slicer.util.loadVolume(output_file)
-            if not temp_segmentation_node:
-                raise RuntimeError("Failed to load SeqSeg output")
-            
-            # Convert volume to segmentation
-            segmentationArray = slicer.util.arrayFromVolume(temp_segmentation_node)
-            segmentationArray = segmentationArray.astype(np.uint8)
-            
-            # Create segment in output segmentation node
-            segmentId = outputSegmentationNode.GetSegmentation().AddEmptySegment("SeqSeg_Segment")
-            
-            # Update segmentation
-            slicer.util.updateSegmentBinaryLabelmapFromArray(
-                segmentationArray, 
-                outputSegmentationNode, 
-                segmentId, 
-                inputVolume
-            )
-            
-            # Clean up temporary volume node
-            slicer.mrmlScene.RemoveNode(temp_segmentation_node)
+            # Use the standardized loading method
+            if not self.loadSegmentationToNode(output_file, outputSegmentationNode, inputVolume):
+                raise RuntimeError("Failed to load SeqSeg output using standardized method")
             
             # Update display
             if showResult:
@@ -1097,7 +1509,7 @@ class seqsegTest(ScriptedLoadableModuleTest):
             fold = "all"
             outputDirectory = "/tmp/test_seqseg_output"  # Test output directory
             logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
-                           maxSteps, 2, 5, imageUnit, nnunetResultsPath, nnunetType, trainDataset, 
+                           maxSteps, 2, 5, imageUnit, "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
                            fold, outputDirectory, outputSegmentation)
             self.delayDisplay("SeqSeg algorithm completed successfully")
         except ImportError as e:

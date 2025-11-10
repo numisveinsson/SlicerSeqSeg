@@ -84,35 +84,45 @@
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="qMRMLNodeComboBox" name="seedPoint2Selector">
-        <property name="toolTip">
-         <string>Select second seed point (markups fiducial)</string>
-        </property>
-        <property name="nodeTypes">
-         <stringlist notr="true">
-          <string>vtkMRMLMarkupsFiducialNode</string>
-         </stringlist>
-        </property>
-        <property name="showChildNodeTypes">
-         <bool>false</bool>
-        </property>
-        <property name="addEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="removeEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QPushButton" name="createSeedPointsButton">
-        <property name="text">
-         <string>Reset Seeds</string>
-        </property>
-        <property name="toolTip">
-         <string>Create new default seed points positioned within the selected volume</string>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="seedPoint2Layout">
+        <item>
+         <widget class="qMRMLNodeComboBox" name="seedPoint2Selector">
+          <property name="toolTip">
+           <string>Select second seed point (markups fiducial)</string>
+          </property>
+          <property name="nodeTypes">
+           <stringlist notr="true">
+            <string>vtkMRMLMarkupsFiducialNode</string>
+           </stringlist>
+          </property>
+          <property name="showChildNodeTypes">
+           <bool>false</bool>
+          </property>
+          <property name="addEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="removeEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="createSeedPointsButton">
+          <property name="text">
+           <string>Auto-Create Seeds</string>
+          </property>
+          <property name="toolTip">
+           <string>Automatically create seed points positioned within the selected volume bounds</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>120</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="radiusLabel">
@@ -124,7 +134,7 @@
       <item row="3" column="1">
        <widget class="ctkSliderWidget" name="radiusSliderWidget">
         <property name="toolTip">
-         <string>Estimated radius for segmentation in image units (mm or cm)</string>
+         <string>Estimated radius for segmentation in image units (default: mm). Typical values: 2-10 mm for vessels</string>
         </property>
         <property name="singleStep">
          <double>0.1</double>
@@ -133,7 +143,7 @@
          <double>0.1</double>
         </property>
         <property name="maximum">
-         <double>100.0</double>
+         <double>30.0</double>
         </property>
         <property name="value">
          <double>5.0</double>
@@ -198,12 +208,12 @@
         </property>
         <item>
          <property name="text">
-          <string>cm</string>
+          <string>mm</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>mm</string>
+          <string>cm</string>
          </property>
         </item>
        </widget>
@@ -285,6 +295,9 @@
          <widget class="ctkDirectoryButton" name="nnunetResultsPathButton">
           <property name="toolTip">
            <string>Path to nnUNet results folder</string>
+          </property>
+          <property name="SlicerParameterName" stdset="0">
+           <string>nnunetResultsPath</string>
           </property>
          </widget>
         </item>
@@ -416,7 +429,7 @@
       <item row="0" column="1">
        <widget class="ctkDirectoryButton" name="outputDirectoryButton">
         <property name="toolTip">
-         <string>Directory for SeqSeg outputs (data_dir). Will contain images/ and seeds.json</string>
+         <string>Directory for SeqSeg outputs. Will contain: images/ (input), seeds.json, output/ (segmentation .mha, surface mesh .vtp files)</string>
         </property>
        </widget>
       </item>
@@ -448,37 +461,185 @@
         </property>
        </widget>
       </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QLabel" name="visualizationLabel">
+        <property name="text">
+         <string>Visualization Results:</string>
+        </property>
+        <property name="font">
+         <font>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string>QLabel {
+    color: #2E86AB;
+    padding: 8px 0px 4px 0px;
+    border-bottom: 1px solid #E0E0E0;
+    margin-bottom: 5px;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <layout class="QVBoxLayout" name="visualizationButtonsLayout">
+        <item>
+         <layout class="QHBoxLayout" name="primaryVisualizationLayout">
+          <item>
+           <widget class="QPushButton" name="loadSegmentationButton">
+            <property name="text">
+             <string>📊 Load Segmentation</string>
+            </property>
+            <property name="toolTip">
+             <string>Load the latest segmentation (.mha) file as an overlay</string>
+            </property>
+            <property name="styleSheet">
+             <string>QPushButton {
+    background-color: #E3F2FD;
+    border: 1px solid #1976D2;
+    border-radius: 3px;
+    padding: 5px 10px;
+    text-align: left;
+}
+QPushButton:hover {
+    background-color: #BBDEFB;
+}</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="loadSurfaceMeshButton">
+            <property name="text">
+             <string>🌐 Load Surface Mesh</string>
+            </property>
+            <property name="toolTip">
+             <string>Load the latest 3D surface mesh (.vtp) file</string>
+            </property>
+            <property name="styleSheet">
+             <string>QPushButton {
+    background-color: #F3E5F5;
+    border: 1px solid #7B1FA2;
+    border-radius: 3px;
+    padding: 5px 10px;
+    text-align: left;
+}
+QPushButton:hover {
+    background-color: #E1BEE7;
+}</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="browseOutputsButton">
+          <property name="text">
+           <string>📁 Browse All Output Files</string>
+          </property>
+          <property name="toolTip">
+           <string>Browse and selectively load all output files from the results directory</string>
+          </property>
+          <property name="styleSheet">
+           <string>QPushButton {
+    background-color: #FFF3E0;
+    border: 1px solid #F57C00;
+    border-radius: 3px;
+    padding: 5px 10px;
+    text-align: center;
+}
+QPushButton:hover {
+    background-color: #FFE0B2;
+}</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="applyButton">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
-     <property name="toolTip">
-      <string>Run SeqSeg segmentation</string>
-     </property>
-     <property name="text">
-      <string>Run SeqSeg</string>
-     </property>
-    </widget>
+    <layout class="QVBoxLayout" name="executeLayout">
+     <item>
+      <widget class="QPushButton" name="applyButton">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="toolTip">
+        <string>Run SeqSeg segmentation</string>
+       </property>
+       <property name="text">
+        <string>Run SeqSeg</string>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>35</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string>QPushButton {
+    background-color: #4CAF50;
+    color: white;
+    font-weight: bold;
+    border: 2px solid #45a049;
+    border-radius: 4px;
+    padding: 5px;
+}
+QPushButton:hover {
+    background-color: #45a049;
+}
+QPushButton:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    border-color: #999999;
+}</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="statusLabel">
+       <property name="text">
+        <string>Ready to run SeqSeg</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
+    color: #666666;
+    font-style: italic;
+    padding: 5px;
+}</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QLabel" name="instructionsLabel">
      <property name="text">
       <string>Instructions:
 1. Load your volume (NIfTI format recommended)
-2. Create two fiducial points as seed points
-3. Set the radius estimate (approximate size of structure to segment)
-4. Configure nnUNet settings (results path, model type, dataset)
-5. Select or create output segmentation
+2. Create seed points: Use "Reset Seeds" for automatic placement or manually create two fiducial points
+3. Set radius estimate in image units (mm or cm - default: mm)
+4. Configure nnUNet settings:
+   - Click "Download Pretrained Weights" for automatic model download (236 MB)
+   - Or set custom nnUNet results path to trained models
+5. Set output directory for results
 6. Click "Run SeqSeg"
+7. Use visualization buttons to load results:
+   - "Load Latest Segmentation" - loads .mha segmentation as overlay
+   - "Load Latest Surface Mesh" - loads .vtp 3D surface model
+   - "Browse All Outputs" - view and load all output files
 
-Note: 
-- SeqSeg package will be installed automatically if needed
-- nnUNet results path must point to trained models
-- First run may take longer due to model setup</string>
+Features:
+- Automatic dependency installation (SeqSeg, nnUNet, etc.)
+- Apple Silicon (M1/M2) Mac compatibility
+- Automatic seed point placement within volume bounds
+- Output files saved to: output_directory/output/
+- First run may take longer due to model and dependency setup</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

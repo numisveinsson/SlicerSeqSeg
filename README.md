@@ -62,6 +62,23 @@ python setup_dependencies.py
 
 ### Output
 - **Output Segmentation**: Segmentation node where the result will be stored
+- **Output Directory**: Directory where SeqSeg saves all results including segmentation (.mha), surface mesh (.vtp), and intermediate files
+
+### Visualization Features
+After running SeqSeg, use the visualization buttons to load results:
+- **Load Latest Segmentation**: Automatically loads the most recent .mha segmentation file as a proper segmentation overlay
+- **Load Latest Surface Mesh**: Loads the most recent .vtp surface mesh as a 3D model with red coloring
+- **Browse All Outputs**: Opens a dialog to view and selectively load all output files (segmentations, meshes, etc.)
+
+Output files are organized in the structure:
+```
+output_directory/
+├── images/           # Input volume (converted to .nii.gz)
+├── seeds.json       # Seed points in SeqSeg format
+└── output/          # SeqSeg results
+    ├── *_seg_containing_seeds_*_steps.mha  # Segmentation
+    └── *_surface_mesh_*_steps.vtp          # Surface mesh
+```
 
 ## Technical Details
 
