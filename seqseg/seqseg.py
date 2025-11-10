@@ -600,7 +600,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 current_unit = self._parameterNode.imageUnit
                 combo_box = self.ui.unitComboBox
                 # Only update if different to avoid circular updates
-                if combo_box.currentText() != current_unit:
+                if combo_box.currentText != current_unit:
                     index = combo_box.findText(current_unit)
                     if index >= 0:
                         combo_box.setCurrentIndex(index)
@@ -616,7 +616,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 current_type = self._parameterNode.nnunetType
                 combo_box = self.ui.nnunetTypeComboBox
                 # Only update if different to avoid circular updates
-                if combo_box.currentText() != current_type:
+                if combo_box.currentText != current_type:
                     index = combo_box.findText(current_type)
                     if index >= 0:
                         combo_box.setCurrentIndex(index)

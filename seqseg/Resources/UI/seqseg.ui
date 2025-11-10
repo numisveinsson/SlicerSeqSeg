@@ -296,9 +296,6 @@
           <property name="toolTip">
            <string>Path to nnUNet results folder</string>
           </property>
-          <property name="SlicerParameterName" stdset="0">
-           <string>nnunetResultsPath</string>
-          </property>
          </widget>
         </item>
         <item>
