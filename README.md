@@ -1,6 +1,24 @@
-# SeqSeg 3D Slicer Extension
+# SeqSeg
 
-This 3D Slicer extension integrates the SeqSeg Python package for seed-based segmentation.
+**Suggested GitHub repository description** (copy into the “About” field on GitHub):
+
+> 3D Slicer extension for seed-based vascular segmentation using SeqSeg and nnUNet—place two fiducials, optional pretrained weights from Zenodo.
+
+**SeqSeg** is a [3D Slicer](https://www.slicer.org/) extension for clinicians and researchers who want to segment tubular structures (for example coronary or other vessels) from CT or MR without drawing full contours. You place two seed points and a radius hint; the module runs the [SeqSeg](https://github.com/numisveinsson/SeqSeg) workflow with nnUNet models and loads the result back into Slicer.
+
+![Example coronary segmentation in 3D Slicer](https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/screenshot/coronary.png)
+
+## Modules
+
+- **seqseg** — Scripted module in the Segmentation category: selects a volume, two fiducial markups, nnUNet paths and options, runs SeqSeg, then loads segmentation (.mha) and optional surface (.vtp) outputs.
+
+## Publication
+
+If you use SeqSeg or this extension in research, please cite:
+
+Sveinsson Cepero, N., Shadden, S.C. SeqSeg: Learning Local Segments for Automatic Vascular Model Construction. *Ann Biomed Eng* **53**, 158–179 (2025). [https://doi.org/10.1007/s10439-024-03611-z](https://doi.org/10.1007/s10439-024-03611-z)
+
+**Known patents:** None known to the extension authors; if that changes, update this section and the extension description in `CMakeLists.txt`.
 
 ## Prerequisites
 
@@ -135,8 +153,12 @@ For more information about SeqSeg, see the [official SeqSeg repository](https://
 
 ## Development
 
-This extension was developed as part of the SlicerSeqSeg project. For issues and contributions, please visit the project repository.
+This extension is developed in **SlicerSeqSeg**. For issues and contributions, use this repository’s issue tracker.
+
+Add the GitHub topic **`3d-slicer-extension`** under repository settings so the project appears with other [Slicer extensions](https://github.com/topics/3d-slicer-extension).
 
 ## License
 
-Please refer to the SeqSeg package documentation for licensing information.
+This extension is licensed under the **Apache License, Version 2.0**. See [LICENSE.txt](LICENSE.txt).
+
+The [SeqSeg](https://github.com/numisveinsson/SeqSeg) Python package is a separate project; see that repository for its license and citation information.
