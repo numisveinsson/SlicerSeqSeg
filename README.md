@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="seqseg/Resources/Icons/seqseg_logo.png" alt="SeqSeg logo" width="200">
+  <img src="seqseg/Resources/Icons/seqseg_logo.png" alt="SeqSeg logo" width="300">
 </p>
 
 # SeqSeg
