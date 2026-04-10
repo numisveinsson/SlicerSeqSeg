@@ -4,11 +4,11 @@ project(SeqSeg)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
-set(EXTENSION_HOMEPAGE "https://www.slicer.org/wiki/Documentation/Nightly/Extensions/SeqSeg")
+set(EXTENSION_HOMEPAGE "https://github.com/numisveinsson/SlicerSeqSeg")
 set(EXTENSION_CONTRIBUTORS "Numi Sveinsson Cepero (UT Austin)")
-set(EXTENSION_DESCRIPTION "SeqSeg extension for seed-based segmentation using the SeqSeg Python package")
-set(EXTENSION_ICONURL "https://www.example.com/Slicer/Extensions/SeqSeg.png")
-set(EXTENSION_SCREENSHOTURLS "https://www.example.com/Slicer/Extensions/SeqSeg/Screenshots/1.png")
+set(EXTENSION_DESCRIPTION "SeqSeg Vascular Segmentation: Extension for seed-based segmentation using the SeqSeg Python package")
+set(EXTENSION_ICONURL "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/Icons/seqseg.jpg")
+set(EXTENSION_SCREENSHOTURLS "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/screenshot/coronary.png")
 set(EXTENSION_DEPENDS "NA") # Specified as a list or "NA" if no dependencies
 
 # Python package dependencies
