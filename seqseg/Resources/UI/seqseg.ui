@@ -219,13 +219,61 @@
        </widget>
       </item>
       <item row="2" column="0">
+       <widget class="QLabel" name="scaleLabel">
+        <property name="text">
+         <string>Scale:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="scaleComboBox">
+        <property name="toolTip">
+         <string>Relates nnUNet training voxel units to your Image Unit. Use 10 if the model was trained in mm and your volume is in cm; use 0.1 if the model was trained in cm and your volume is in mm; use 1 when training units match the image (default).</string>
+        </property>
+        <property name="currentIndex">
+         <number>1</number>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>scale</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>0.1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>10</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QLabel" name="scaleExplanationLabel">
+        <property name="text">
+         <string>Scale matches nnUNet training units to Image Unit: if the model was trained in mm and the image is in cm, choose 10; if the model was trained in cm and the image is in mm, choose 0.1; if units match, choose 1 (default).</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
        <widget class="QLabel" name="maxBranchesLabel">
         <property name="text">
          <string>Max Branches:</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="4" column="1">
        <widget class="QSpinBox" name="maxBranchesSpinBox">
         <property name="toolTip">
          <string>Maximum number of branches for segmentation</string>
@@ -244,14 +292,14 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="5" column="0">
        <widget class="QLabel" name="maxStepsPerBranchLabel">
         <property name="text">
          <string>Max Steps per Branch:</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="5" column="1">
        <widget class="QSpinBox" name="maxStepsPerBranchSpinBox">
         <property name="toolTip">
          <string>Maximum number of steps per branch</string>

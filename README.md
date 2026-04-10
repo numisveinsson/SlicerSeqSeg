@@ -1,12 +1,12 @@
+<p align="center">
+  <img src="seqseg/Resources/Icons/seqseg_logo.png" alt="SeqSeg logo" width="96">
+</p>
+
 # SeqSeg
 
-**Suggested GitHub repository description** (copy into the “About” field on GitHub):
-
-> 3D Slicer extension for seed-based vascular segmentation using SeqSeg and nnUNet—place two fiducials, optional pretrained weights from Zenodo.
+![Example coronary segmentation in 3D Slicer](seqseg/Resources/screenshot/coronary.png)
 
 **SeqSeg** is a [3D Slicer](https://www.slicer.org/) extension for clinicians and researchers who want to segment tubular structures (for example coronary or other vessels) from CT or MR without drawing full contours. You place two seed points and a radius hint; the module runs the [SeqSeg](https://github.com/numisveinsson/SeqSeg) workflow with nnUNet models and loads the result back into Slicer.
-
-![Example coronary segmentation in 3D Slicer](https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/screenshot/coronary.png)
 
 ## Modules
 

@@ -149,6 +149,7 @@ class seqsegParameterNode:
     maxBranches: Annotated[int, WithinRange(1, 50)] = 2  # Max number of branches
     maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 5  # Max steps per branch
     imageUnit: Annotated[str, Choice(["mm", "cm"])] = "mm"  # Image unit (mm or cm)
+    scale: Annotated[str, Choice(["0.1", "1", "10"])] = "1"  # SeqSeg -scale vs. nnUNet training units
     coordinateSystem: Annotated[str, Choice(["LPS World", "RAS World"])] = "LPS World"  # Coordinate system for seed points
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
     nnunetType: Annotated[str, Choice(["3d_fullres", "2d"])] = "3d_fullres"  # Type of nnUNet model
@@ -523,7 +524,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._updateStatusMessage("Running SeqSeg algorithm...")
             self.logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                                maxSteps, self._parameterNode.maxBranches, self._parameterNode.maxStepsPerBranch,
-                               imageUnit, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
+                               imageUnit, self._parameterNode.scale, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
                                fold, outputDirectory, outputSegmentationNode)
                                    
             self._updateStatusMessage("SeqSeg completed successfully! Use visualization buttons to view results.")
@@ -1077,6 +1078,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                   maxBranches: int,
                   maxStepsPerBranch: int,
                   imageUnit: str,
+                  scale: str,
                   coordinateSystem: str,
                   nnunetResultsPath: str,
                   nnunetType: str,
@@ -1094,6 +1096,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         :param radiusEstimate: estimated radius for segmentation in millimeters
         :param maxSteps: maximum number of steps for segmentation
         :param imageUnit: unit of the medical image (mm or cm)
+        :param scale: SeqSeg -scale as "0.1", "1", or "10" (training vs. image unit conversion)
         :param nnunetResultsPath: path to nnUNet results folder
         :param nnunetType: type of nnUNet model (3d_fullres or 2d)
         :param trainDataset: name of dataset used to train nnUNet
@@ -1147,7 +1150,13 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         
         if not trainDataset:
             raise ValueError("Train dataset name is required")
-        
+
+        allowed_scales = {"0.1", "1", "10"}
+        if scale not in allowed_scales:
+            scale = "1"
+            logging.warning(f"Invalid scale, using default: 1 (got {scale!r})")
+        scale_value = float(scale)
+
         # Validate output directory
         if not outputDirectory:
             raise ValueError("Output directory is required. Please select an output directory.")
@@ -1323,6 +1332,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             logging.info(f"Max Branches: {maxBranches}")
             logging.info(f"Max Steps per Branch: {maxStepsPerBranch}")
             logging.info(f"Image Unit: {imageUnit}")
+            logging.info(f"Scale: {scale_value}")
             logging.info(f"nnUNet Results Path: '{nnunetResultsPath}'")
             logging.info(f"nnUNet Type: {nnunetType}")
             logging.info(f"Train Dataset: {trainDataset}")
@@ -1346,6 +1356,7 @@ Max Steps: {maxSteps}
 Max Branches: {maxBranches}
 Max Steps per Branch: {maxStepsPerBranch}
 Image Unit: {imageUnit}
+Scale: {scale_value}
 
 nnUNet Configuration:
 Results Path: {nnunetResultsPath if nnunetResultsPath else 'NOT SET'}
@@ -1369,6 +1380,7 @@ Output Directory: {data_dir}"""
                 "-config_name", "aorta_tutorial",  # Default config name
                 "-outdir", output_dir,
                 "-unit", imageUnit,
+                "-scale", str(scale_value),
                 "-max_n_steps", str(maxSteps),
                 "-max_n_branches", str(maxBranches),
                 "-max_n_steps_per_branch", str(maxStepsPerBranch)
@@ -1509,7 +1521,7 @@ class seqsegTest(ScriptedLoadableModuleTest):
             fold = "all"
             outputDirectory = "/tmp/test_seqseg_output"  # Test output directory
             logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
-                           maxSteps, 2, 5, imageUnit, "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
+                           maxSteps, 2, 5, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
                            fold, outputDirectory, outputSegmentation)
             self.delayDisplay("SeqSeg algorithm completed successfully")
         except ImportError as e:
