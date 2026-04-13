@@ -327,7 +327,7 @@
       <string>nnUNet Configuration</string>
      </property>
      <property name="collapsed">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
      <layout class="QFormLayout" name="formLayout_nnunet">
       <item row="0" column="0">
@@ -346,26 +346,53 @@
           </property>
          </widget>
         </item>
+       </layout>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="nnunetDownloadLabel">
+        <property name="text">
+         <string>Download:</string>
+        </property>
+        <property name="toolTip">
+         <string>Download pretrained nnUNet model weights into the parent folder you choose (see each button tooltip).</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <layout class="QVBoxLayout" name="nnunetDownloadsLayout">
+        <property name="spacing">
+         <number>4</number>
+        </property>
         <item>
          <widget class="QPushButton" name="downloadWeightsButton">
           <property name="text">
-           <string>Download Pretrained Weights</string>
+           <string>Download Aorta Weights (CT/MR)</string>
           </property>
           <property name="toolTip">
-           <string>Download pretrained model weights from Zenodo (236.3 MB)</string>
+           <string>Download Aorta weights (CT/MR) from Zenodo (236.3 MB). Extracts to nnUNet_results.</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="downloadCoronaryWeightsButton">
+          <property name="text">
+           <string>Download Coronary CT Weights</string>
+          </property>
+          <property name="toolTip">
+           <string>Download CT coronary lumen weights from Zenodo (~2.7 MB). Extracts to nnUNet_results_coronary; Train Dataset can be set to Dataset010_SEQCOROASOCACT.</string>
           </property>
          </widget>
         </item>
        </layout>
       </item>
-      <item row="1" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="nnunetTypeLabel">
         <property name="text">
          <string>nnUNet Type:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="nnunetTypeComboBox">
         <property name="toolTip">
          <string>Type of nnUNet model to use</string>
@@ -385,14 +412,14 @@
         </item>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="trainDatasetLabel">
         <property name="text">
          <string>Train Dataset:</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QLineEdit" name="trainDatasetLineEdit">
         <property name="toolTip">
          <string>Name of dataset used to train nnUNet</string>
@@ -405,14 +432,14 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="foldLabel">
         <property name="text">
          <string>Fold:</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="QComboBox" name="foldComboBox">
         <property name="toolTip">
          <string>Which fold to use for nnUNet model</string>
@@ -534,44 +561,20 @@
           <item>
            <widget class="QPushButton" name="loadSegmentationButton">
             <property name="text">
-             <string>📊 Load Segmentation</string>
+             <string>Load Segmentation</string>
             </property>
             <property name="toolTip">
              <string>Load the latest segmentation (.mha) file as an overlay</string>
-            </property>
-            <property name="styleSheet">
-             <string>QPushButton {
-    background-color: #E3F2FD;
-    border: 1px solid #1976D2;
-    border-radius: 3px;
-    padding: 5px 10px;
-    text-align: left;
-}
-QPushButton:hover {
-    background-color: #BBDEFB;
-}</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="loadSurfaceMeshButton">
             <property name="text">
-             <string>🌐 Load Surface Mesh</string>
+             <string>Load Surface Mesh</string>
             </property>
             <property name="toolTip">
              <string>Load the latest 3D surface mesh (.vtp) file</string>
-            </property>
-            <property name="styleSheet">
-             <string>QPushButton {
-    background-color: #F3E5F5;
-    border: 1px solid #7B1FA2;
-    border-radius: 3px;
-    padding: 5px 10px;
-    text-align: left;
-}
-QPushButton:hover {
-    background-color: #E1BEE7;
-}</string>
             </property>
            </widget>
           </item>
@@ -580,22 +583,10 @@ QPushButton:hover {
         <item>
          <widget class="QPushButton" name="browseOutputsButton">
           <property name="text">
-           <string>📁 Browse All Output Files</string>
+           <string>Browse All Output Files</string>
           </property>
           <property name="toolTip">
            <string>Browse and selectively load all output files from the results directory</string>
-          </property>
-          <property name="styleSheet">
-           <string>QPushButton {
-    background-color: #FFF3E0;
-    border: 1px solid #F57C00;
-    border-radius: 3px;
-    padding: 5px 10px;
-    text-align: center;
-}
-QPushButton:hover {
-    background-color: #FFE0B2;
-}</string>
           </property>
          </widget>
         </item>
@@ -665,26 +656,9 @@ QPushButton:disabled {
    <item>
     <widget class="QLabel" name="instructionsLabel">
      <property name="text">
-      <string>Instructions:
-1. Load your volume (NIfTI format recommended)
-2. Create seed points: Use "Reset Seeds" for automatic placement or manually create two fiducial points
-3. Set radius estimate in image units (mm or cm - default: mm)
-4. Configure nnUNet settings:
-   - Click "Download Pretrained Weights" for automatic model download (236 MB)
-   - Or set custom nnUNet results path to trained models
-5. Set output directory for results
-6. Click "Run SeqSeg"
-7. Use visualization buttons to load results:
-   - "Load Latest Segmentation" - loads .mha segmentation as overlay
-   - "Load Latest Surface Mesh" - loads .vtp 3D surface model
-   - "Browse All Outputs" - view and load all output files
+      <string>Quick start: load a volume, pick or Auto-Create Seeds (two fiducials), set radius, choose nnUNet results (download Aorta or Coronary weights if needed), set output folder, Run SeqSeg. Then use Load Segmentation / Load Surface Mesh / Browse All Output Files.
 
-Features:
-- Automatic dependency installation (SeqSeg, nnUNet, etc.)
-- Apple Silicon (M1/M2) Mac compatibility
-- Automatic seed point placement within volume bounds
-- Output files saved to: output_directory/output/
-- First run may take longer due to model and dependency setup</string>
+Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After downloading weights, confirm Train Dataset (Aorta MR/CT is prompted; Coronary uses Dataset010_SEQCOROASOCACT). First run may install dependencies and take longer. Results live under output_directory/output/.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

@@ -49,7 +49,9 @@ python setup_dependencies.py
    - Select your two seed point markups nodes
    - Set the radius estimate (approximate size of the structure you want to segment)
    - Configure nnUNet settings:
-     - **Download pretrained weights**: Click "Download Pretrained Weights" button to automatically download model weights from [Zenodo](https://zenodo.org/records/15020477) (236.3 MB). The weights will be saved to `~/SeqSeg_Weights/nnUNet_results` by default, and the path will be set automatically.
+     - **Download model weights**:
+       - **Aorta weights (CT/MR)**: Click "Download Aorta Weights (CT/MR)" to fetch weights from [Zenodo](https://zenodo.org/records/15020477) (236.3 MB). They extract to `~/SeqSeg_Weights/nnUNet_results` by default, and the nnUNet results path is set automatically.
+       - **Coronary CT (CTA lumen)**: Click "Download Coronary CT Weights" or download manually from [Zenodo](https://zenodo.org/records/19547894) (~2.7 MB). The module sets **Train Dataset** to **Dataset010_SEQCOROASOCACT** when you use this download. Files extract to `nnUNet_results_coronary` next to your chosen download folder.
      - Or manually set nnUNet results path to your trained models directory
      - Choose nnUNet type (3d_fullres or 2d)
      - Set train dataset name (default: Dataset005_SEQAORTANDFEMOMR for CT, or Dataset006_SEQAORTANDFEMOCT for MR)
@@ -72,8 +74,10 @@ python setup_dependencies.py
 - **Image Unit**: Unit of the medical image (mm or cm, default: mm)
 
 ### nnUNet Configuration
+This section opens **expanded** by default so paths and downloads are easier to find.
 - **nnUNet Results Path**: Path to the nnUNet results folder containing trained models
-  - **Download Pretrained Weights Button**: Click to automatically download pretrained model weights (236.3 MB) from [Zenodo](https://zenodo.org/records/15020477). Default location: `~/SeqSeg_Weights/nnUNet_results`
+  - **Download Aorta Weights (CT/MR)**: Aorta weights (CT/MR), 236.3 MB, from [Zenodo](https://zenodo.org/records/15020477). Default folder: `~/SeqSeg_Weights/nnUNet_results`. After a new download, the module asks whether **Train Dataset** should be MR (`Dataset005_SEQAORTANDFEMOMR`) or CT (`Dataset006_SEQAORTANDFEMOCT`).
+  - **Download Coronary CT Weights**: Coronary CTA lumen weights (~2.7 MB) from [Zenodo](https://zenodo.org/records/19547894). Default folder: `~/SeqSeg_Weights/nnUNet_results_coronary`. **Train Dataset** is set to `Dataset010_SEQCOROASOCACT` when you use this download (including when reusing an existing folder).
 - **nnUNet Type**: Type of nnUNet model (3d_fullres or 2d, default: 3d_fullres)
 - **Train Dataset**: Name of dataset used to train nnUNet (default: Dataset005_SEQAORTANDFEMOMR for CT, Dataset006_SEQAORTANDFEMOCT for MR)
 - **Fold**: Which fold to use for nnUNet model (all, 0, 1, 2, 3, 4, default: all)
@@ -84,9 +88,9 @@ python setup_dependencies.py
 
 ### Visualization Features
 After running SeqSeg, use the visualization buttons to load results:
-- **Load Latest Segmentation**: Automatically loads the most recent .mha segmentation file as a proper segmentation overlay
-- **Load Latest Surface Mesh**: Loads the most recent .vtp surface mesh as a 3D model with red coloring
-- **Browse All Outputs**: Opens a dialog to view and selectively load all output files (segmentations, meshes, etc.)
+- **Load Segmentation**: Loads the most recent .mha segmentation file as a segmentation overlay
+- **Load Surface Mesh**: Loads the most recent .vtp surface mesh as a 3D model
+- **Browse All Output Files**: Opens a dialog to view and selectively load output files (segmentations, meshes, etc.)
 
 Output files are organized in the structure:
 ```
@@ -145,7 +149,7 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
 
 SeqSeg requires:
 1. nnUNet framework properly installed
-2. Trained nnUNet models (e.g., Dataset005_SEQAORTANDFEMOMR or Dataset006_SEQAORTANDFEMOCT)
+2. Trained nnUNet models (e.g., Dataset005_SEQAORTANDFEMOMR, Dataset006_SEQAORTANDFEMOCT, or Dataset010_SEQCOROASOCACT for coronary CT)
 3. Proper nnUNet environment variables set
 4. Compatible image formats (NIfTI recommended)
 

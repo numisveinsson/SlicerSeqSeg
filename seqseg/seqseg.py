@@ -206,6 +206,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.applyButton.connect("clicked(bool)", self.onApplyButton)
         self.ui.createSeedPointsButton.connect("clicked(bool)", self.onCreateSeedPointsButton)
         self.ui.downloadWeightsButton.connect("clicked(bool)", self.onDownloadWeightsButton)
+        if hasattr(self.ui, "downloadCoronaryWeightsButton"):
+            self.ui.downloadCoronaryWeightsButton.connect("clicked(bool)", self.onDownloadCoronaryWeightsButton)
         
         # Output visualization buttons
         if hasattr(self.ui, 'loadSegmentationButton'):
@@ -396,7 +398,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Check for optional improvements
             suggestions = []
             if not self._parameterNode.nnunetResultsPath:
-                suggestions.append("Consider downloading pretrained weights")
+                suggestions.append("Consider downloading Aorta weights (CT/MR) or Coronary CT weights")
             
             if suggestions:
                 self._updateStatusMessage(f"Ready to run! Tip: {suggestions[0]}")
@@ -699,113 +701,189 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._parameterNode.seedPoint2 = seedPoint2Node.GetID()
 
     def onDownloadWeightsButton(self) -> None:
-        """Download pretrained model weights from Zenodo."""
-        import shutil
-        import tempfile
-        import zipfile
-        from pathlib import Path
-        
-        zenodo_url = "https://zenodo.org/records/15020477/files/nnUNet_results.zip?download=1"
-        default_weights_dir = os.path.join(os.path.expanduser("~"), "SeqSeg_Weights")
-        
+        """Download Aorta weights (CT/MR) from Zenodo."""
+        self._downloadNnunetWeightsFromZenodo(
+            zenodo_file_url="https://zenodo.org/records/15020477/files/nnUNet_results.zip?download=1",
+            zip_filename="nnUNet_results.zip",
+            extracted_dir_name="nnUNet_results",
+            progress_label="Downloading Aorta weights (CT/MR) (236.3 MB)...",
+            zenodo_record_page_url="https://zenodo.org/records/15020477",
+            weights_profile="aorta",
+        )
+
+    def onDownloadCoronaryWeightsButton(self) -> None:
+        """Download CT coronary lumen nnUNet weights from Zenodo (Dataset010_SEQCOROASOCACT)."""
+        self._downloadNnunetWeightsFromZenodo(
+            zenodo_file_url="https://zenodo.org/records/19547894/files/nnUNet_results_coronary.zip?download=1",
+            zip_filename="nnUNet_results_coronary.zip",
+            extracted_dir_name="nnUNet_results_coronary",
+            progress_label="Downloading Coronary CT weights (~2.7 MB)...",
+            zenodo_record_page_url="https://zenodo.org/records/19547894",
+            weights_profile="coronary",
+        )
+
+    def _prompt_aorta_train_dataset(self) -> Optional[str]:
+        """Ask MR vs CT dataset id for Aorta weights. Returns dataset string or None if cancelled."""
+        items = [
+            "Dataset005_SEQAORTANDFEMOMR (MR)",
+            "Dataset006_SEQAORTANDFEMOCT (CT)",
+        ]
         try:
-            with slicer.util.tryWithErrorDisplay(_("Failed to download pretrained weights."), waitCursor=True):
-                # Ask user for download location - try different methods
+            import qt
+            choice, ok = qt.QInputDialog.getItem(
+                slicer.util.mainWindow(),
+                "Train dataset",
+                "Select Train Dataset for Aorta weights (CT/MR):",
+                items,
+                0,
+                False,
+            )
+        except ImportError:
+            try:
+                from PySide2.QtWidgets import QInputDialog
+                choice, ok = QInputDialog.getItem(
+                    slicer.util.mainWindow(),
+                    "Train dataset",
+                    "Select Train Dataset for Aorta weights (CT/MR):",
+                    items,
+                    0,
+                    False,
+                )
+            except ImportError:
+                logging.warning("QInputDialog not available; Train Dataset not updated.")
+                return None
+        if not ok or not choice:
+            return None
+        return choice.split(" ", 1)[0]
+
+    def _sync_train_dataset_for_weights_profile(self, weights_profile: str, mode: str) -> str:
+        """
+        Align Train Dataset with downloaded or selected weights.
+
+        :param weights_profile: 'aorta' or 'coronary'
+        :param mode: 'fresh_download' (may prompt for Aorta MR vs CT) or 'use_existing'
+        :return: Human-readable suffix for status dialogs (may be empty).
+        """
+        if weights_profile == "coronary":
+            self._parameterNode.trainDataset = "Dataset010_SEQCOROASOCACT"
+            return "\n\nTrain Dataset set to Dataset010_SEQCOROASOCACT."
+        if weights_profile == "aorta" and mode == "fresh_download":
+            chosen = self._prompt_aorta_train_dataset()
+            if chosen:
+                self._parameterNode.trainDataset = chosen
+                return f"\n\nTrain Dataset set to {chosen}."
+            return "\n\nTrain Dataset unchanged (MR/CT selection cancelled)."
+        return ""
+
+    def _downloadNnunetWeightsFromZenodo(
+        self,
+        zenodo_file_url,
+        zip_filename,
+        extracted_dir_name,
+        progress_label,
+        zenodo_record_page_url,
+        weights_profile,
+    ) -> None:
+        """Download a nnUNet results archive from Zenodo, extract it, and set nnUNet results path."""
+        import zipfile
+
+        default_weights_dir = os.path.join(os.path.expanduser("~"), "SeqSeg_Weights")
+
+        try:
+            with slicer.util.tryWithErrorDisplay(_("Failed to download model weights."), waitCursor=True):
                 download_dir = None
                 try:
-                    # Method 1: Try Slicer's qt module
                     import qt
                     download_dir = qt.QFileDialog.getExistingDirectory(
                         None,
-                        "Select directory to download pretrained weights",
+                        "Select directory to download model weights",
                         default_weights_dir
                     )
                 except ImportError:
                     try:
-                        # Method 2: Try direct Qt import
                         from PySide2.QtWidgets import QFileDialog
                         download_dir = QFileDialog.getExistingDirectory(
                             None,
-                            "Select directory to download pretrained weights",
+                            "Select directory to download model weights",
                             default_weights_dir
                         )
                     except ImportError:
-                        # Method 3: Fallback to default directory
                         logging.warning("Could not open directory dialog, using default directory")
                         download_dir = default_weights_dir
                 if not download_dir:
-                    return  # User cancelled
-                
-                # Create download directory if it doesn't exist
+                    return
+
                 os.makedirs(download_dir, exist_ok=True)
-                
-                # Check if weights already exist
-                weights_path = os.path.join(download_dir, "nnUNet_results")
+
+                weights_path = os.path.join(download_dir, extracted_dir_name)
                 if os.path.exists(weights_path):
                     response = slicer.util.confirmYesNoDisplay(
                         f"Weights already exist at:\n{weights_path}\n\nDo you want to download again?",
                         windowTitle="Weights Already Exist"
                     )
                     if not response:
-                        # Use existing weights
                         self._parameterNode.nnunetResultsPath = weights_path
-                        slicer.util.infoDisplay(f"Using existing weights at:\n{weights_path}")
+                        train_note = ""
+                        if weights_profile == "coronary":
+                            train_note = self._sync_train_dataset_for_weights_profile(
+                                weights_profile, mode="use_existing"
+                            )
+                        slicer.util.infoDisplay(
+                            f"Using existing weights at:\n{weights_path}{train_note}"
+                        )
                         return
-                
-                # Show progress
+
                 progressBar = slicer.util.createProgressDialog(
-                    labelText="Downloading pretrained weights (236.3 MB)...",
+                    labelText=progress_label,
                     maximum=0,
                     windowTitle="Downloading Weights"
                 )
                 slicer.app.processEvents()
-                
-                # Download the file
+
                 import urllib.request
-                zip_file = os.path.join(download_dir, "nnUNet_results.zip")
-                
-                logging.info(f"Downloading weights from {zenodo_url} to {zip_file}")
-                
+                zip_file = os.path.join(download_dir, zip_filename)
+
+                logging.info(f"Downloading weights from {zenodo_file_url} to {zip_file}")
+
                 def show_progress(block_num, block_size, total_size):
                     if total_size > 0:
                         percent = min(100, (block_num * block_size * 100) // total_size)
                         progressBar.setValue(percent)
                         progressBar.setLabelText(f"Downloading... {percent}%")
                         slicer.app.processEvents()
-                
-                urllib.request.urlretrieve(zenodo_url, zip_file, show_progress)
-                
+
+                urllib.request.urlretrieve(zenodo_file_url, zip_file, show_progress)
+
                 progressBar.setLabelText("Extracting weights...")
                 slicer.app.processEvents()
-                
-                # Extract the zip file
+
                 logging.info(f"Extracting {zip_file} to {download_dir}")
                 with zipfile.ZipFile(zip_file, 'r') as zip_ref:
                     zip_ref.extractall(download_dir)
-                
-                # Remove the zip file
+
                 os.remove(zip_file)
-                
-                # Verify extraction
+
                 if os.path.exists(weights_path):
-                    # Update the parameter node with the new path
                     self._parameterNode.nnunetResultsPath = weights_path
+                    train_note = self._sync_train_dataset_for_weights_profile(
+                        weights_profile, mode="fresh_download"
+                    )
                     slicer.util.infoDisplay(
-                        f"Successfully downloaded and extracted pretrained weights to:\n{weights_path}\n\n"
-                        f"The nnUNet Results Path has been updated automatically.",
+                        f"Successfully downloaded and extracted model weights to:\n{weights_path}\n\n"
+                        f"The nnUNet Results Path has been updated automatically.{train_note}",
                         windowTitle="Download Complete"
                     )
                     logging.info(f"Successfully downloaded weights to {weights_path}")
                 else:
                     raise RuntimeError(f"Extraction failed: {weights_path} not found")
-                
+
                 progressBar.close()
-                
+
         except Exception as e:
             logging.error(f"Failed to download weights: {e}")
             slicer.util.errorDisplay(
-                f"Failed to download pretrained weights:\n{str(e)}\n\n"
-                f"You can manually download from:\nhttps://zenodo.org/records/15020477",
+                f"Failed to download model weights:\n{str(e)}\n\n"
+                f"You can manually download from:\n{zenodo_record_page_url}",
                 windowTitle="Download Failed"
             )
 
