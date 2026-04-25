@@ -168,7 +168,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="maxStepsLabel">
         <property name="text">
-         <string>Max Steps:</string>
+         <string>Nr. of Steps:</string>
         </property>
        </widget>
       </item>
@@ -351,10 +351,10 @@
       <item row="1" column="0">
        <widget class="QLabel" name="nnunetDownloadLabel">
         <property name="text">
-         <string>Download:</string>
+         <string>Pretrained models:</string>
         </property>
         <property name="toolTip">
-         <string>Download pretrained nnUNet model weights into the parent folder you choose (see each button tooltip).</string>
+         <string>No training or command line required: click a button below. Slicer asks where to save; the extension downloads pretrained weights, unpacks them, and can set nnUNet Results Path for you.</string>
         </property>
        </widget>
       </item>
@@ -369,7 +369,7 @@
            <string>Download Aorta Weights (CT/MR)</string>
           </property>
           <property name="toolTip">
-           <string>Download Aorta weights (CT/MR) from Zenodo (236.3 MB). Extracts to nnUNet_results.</string>
+           <string>One-click download: aorta weights (CT/MR) from Zenodo (236.3 MB). Choose a parent folder when asked; extracts to nnUNet_results and updates nnUNet Results Path when possible.</string>
           </property>
          </widget>
         </item>
@@ -379,7 +379,7 @@
            <string>Download Coronary CT Weights</string>
           </property>
           <property name="toolTip">
-           <string>Download CT coronary lumen weights from Zenodo (~2.7 MB). Extracts to nnUNet_results_coronary; Train Dataset can be set to Dataset010_SEQCOROASOCACT.</string>
+           <string>One-click download: coronary CTA lumen weights from Zenodo (~2.7 MB). Choose a parent folder when asked; extracts to nnUNet_results_coronary; Train Dataset can be set to Dataset010_SEQCOROASOCACT.</string>
           </property>
          </widget>
         </item>
@@ -420,16 +420,31 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QLineEdit" name="trainDatasetLineEdit">
+       <widget class="QComboBox" name="trainDatasetComboBox">
         <property name="toolTip">
-         <string>Name of dataset used to train nnUNet</string>
+         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path)</string>
         </property>
-        <property name="text">
-         <string>Dataset005_SEQAORTANDFEMOMR</string>
+        <property name="editable">
+         <bool>false</bool>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>trainDataset</string>
         </property>
+        <item>
+         <property name="text">
+          <string>Dataset005_SEQAORTANDFEMOMR</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Dataset006_SEQAORTANDFEMOCT</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Dataset010_SEQCOROASOCACT</string>
+         </property>
+        </item>
        </widget>
       </item>
       <item row="4" column="0">
@@ -501,7 +516,7 @@
       <item row="0" column="1">
        <widget class="ctkDirectoryButton" name="outputDirectoryButton">
         <property name="toolTip">
-         <string>Directory for SeqSeg outputs. Will contain: images/ (input), seeds.json, output/ (segmentation .mha, surface mesh .vtp files)</string>
+         <string>Directory for pipeline outputs (SeqSeg data layout). Will contain: images/ (input), seeds.json, output/ (segmentation .mha, surface mesh .vtp files)</string>
         </property>
        </widget>
       </item>
@@ -603,7 +618,7 @@
         <bool>true</bool>
        </property>
        <property name="toolTip">
-        <string>Run SeqSeg segmentation</string>
+        <string>Run vascular segmentation (SeqSeg CLI)</string>
        </property>
        <property name="text">
         <string>Run SeqSeg</string>
@@ -637,7 +652,7 @@ QPushButton:disabled {
      <item>
       <widget class="QLabel" name="statusLabel">
        <property name="text">
-        <string>Ready to run SeqSeg</string>
+        <string>Ready to run vessel segmentation</string>
        </property>
        <property name="alignment">
         <set>Qt::AlignCenter</set>
@@ -656,9 +671,9 @@ QPushButton:disabled {
    <item>
     <widget class="QLabel" name="instructionsLabel">
      <property name="text">
-      <string>Quick start: load a volume, pick or Auto-Create Seeds (two fiducials), set radius, choose nnUNet results (download Aorta or Coronary weights if needed), set output folder, Run SeqSeg. Then use Load Segmentation / Load Surface Mesh / Browse All Output Files.
+      <string>Quick start: load a volume, pick or Auto-Create Seeds (two fiducials), set radius, open nnUNet Configuration and click Download Aorta or Download Coronary CT Weights if you need models (buttons fetch and unpack weights—no manual training), set output folder, Run SeqSeg (vessel segmentation). Then use Load Segmentation / Load Surface Mesh / Browse All Output Files.
 
-Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After downloading weights, confirm Train Dataset (Aorta MR/CT is prompted; Coronary uses Dataset010_SEQCOROASOCACT). First run may install dependencies and take longer. Results live under output_directory/output/.</string>
+Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After the download buttons finish, confirm Train Dataset (Aorta MR/CT is prompted; Coronary uses Dataset010_SEQCOROASOCACT). First run may install dependencies and take longer. Results live under output_directory/output/.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for SeqSeg Slicer Extension dependencies
+Setup script for SeqSeg Vessel Segmentation (SeqSegVesselSegmentation) Slicer extension dependencies
 """
 
 import subprocess
@@ -8,7 +8,7 @@ import sys
 import os
 
 def install_dependencies():
-    """Install required Python packages for SeqSeg extension."""
+    """Install required Python packages for the SeqSeg Vessel Segmentation extension."""
     
     requirements = [
         "seqseg==1.0.1",
@@ -16,7 +16,7 @@ def install_dependencies():
         "torch>=2.9.0",
     ]
     
-    print("Installing SeqSeg extension dependencies...")
+    print("Installing SeqSeg Vessel Segmentation extension dependencies...")
     
     for package in requirements:
         try:
@@ -28,13 +28,13 @@ def install_dependencies():
             return False
     
     print("\n✓ All dependencies installed successfully!")
-    print("\nYou can now use the SeqSeg extension in 3D Slicer.")
+    print("\nYou can now use the SeqSeg Vessel Segmentation extension in 3D Slicer.")
     return True
 
 def check_dependencies():
     """Check if dependencies are already installed."""
     
-    print("Checking SeqSeg dependencies...")
+    print("Checking SeqSeg Vessel Segmentation extension dependencies...")
     
     try:
         import seqseg

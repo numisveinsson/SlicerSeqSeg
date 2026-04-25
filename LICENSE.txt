@@ -1,4 +1,4 @@
-SlicerSeqSeg — 3D Slicer extension integrating the SeqSeg segmentation workflow.
+SlicerSeqSeg — 3D Slicer extension (SeqSegVesselSegmentation) integrating the SeqSeg vascular segmentation workflow.
 
 Copyright 2026 Numi Sveinsson Cepero (The University of Texas at Austin)
 

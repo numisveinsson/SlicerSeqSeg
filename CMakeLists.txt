@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.16.3...3.19.7 FATAL_ERROR)
 
-project(SeqSeg)
+project(SeqSegVesselSegmentation)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
 set(EXTENSION_HOMEPAGE "https://github.com/numisveinsson/SlicerSeqSeg")
 set(EXTENSION_CONTRIBUTORS "Numi Sveinsson Cepero (UT Austin)")
-set(EXTENSION_DESCRIPTION "SeqSeg Vascular Segmentation: Extension for seed-based segmentation using the SeqSeg Python package")
+set(EXTENSION_DESCRIPTION "SeqSegVesselSegmentation: 3D Slicer extension for vascular (and other tubular) seed-based segmentation using the SeqSeg Python package and nnUNet. Pretrained nnUNet weights install from the module via download buttons—no manual training.")
 set(EXTENSION_ICONURL "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/Icons/seqseg.jpg")
 set(EXTENSION_SCREENSHOTURLS "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/screenshot/coronary.png")
 set(EXTENSION_DEPENDS "NA") # Specified as a list or "NA" if no dependencies

@@ -40,19 +40,20 @@ class seqseg(ScriptedLoadableModule):
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = _("SeqSeg")
+        self.parent.title = _("SeqSeg Vessel Segmentation")
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Segmentation")]
         self.parent.dependencies = []
         self.parent.contributors = ["Numi Sveinsson Cepero (UC Berkeley & UT Austin)"]
         # _() function marks text as translatable to other languages
         self.parent.helpText = _("""
-SeqSeg is a seed-based segmentation module that uses the SeqSeg Python package. 
-It requires two seed points and a volume as input to produce a segmentation, surface mesh and centerline.
-See more information in <a href="https://github.com/numisveinsson/SeqSeg">module documentation</a>.
+SeqSeg Vessel Segmentation is a seed-based vascular segmentation module for 3D Slicer. It uses the SeqSeg Python package,
+requires two seed points and a volume as input, and produces a segmentation, surface mesh, and centerline.
+Pretrained nnUNet weights are installed with the <b>Download Aorta Weights (CT/MR)</b> and <b>Download Coronary CT Weights</b> buttons in <b>nnUNet Configuration</b> (pick a folder when asked)—no separate model training for routine use.
+See more information in <a href="https://github.com/numisveinsson/SeqSeg">SeqSeg package documentation</a>.
 """)
         self.parent.acknowledgementText = _("""
 This module was developed by Numi Sveinsson Cepero at UC Berkeley & UT Austin.
-It integrates the SeqSeg Python package for seed-based segmentation into 3D Slicer.
+It integrates the SeqSeg Python package for seed-based vascular segmentation into 3D Slicer.
 See the paper <a href="https://rdcu.be/ePeZD">here</a> for more details.
 Cite: Sveinsson Cepero, N., Shadden, S.C. SeqSeg: Learning Local Segments for Automatic Vascular Model Construction. Ann Biomed Eng 53, 158–179 (2025). https://doi.org/10.1007/s10439-024-03611-z
                                         
@@ -96,7 +97,7 @@ def registerSampleData():
     # SeqSeg Sample Data 1 - Example medical volume for testing SeqSeg
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
-        category="SeqSeg",
+        category="SeqSeg Vessel Segmentation",
         sampleName="SeqSeg Test Volume 1",
         # Thumbnail should have size of approximately 260x280 pixels and stored in Resources/Icons folder.
         thumbnailFileName=os.path.join(iconsPath, "seqseg1.png"),
@@ -112,7 +113,7 @@ def registerSampleData():
     # SeqSeg Sample Data 2 - Another example volume
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
-        category="SeqSeg",
+        category="SeqSeg Vessel Segmentation",
         sampleName="SeqSeg Test Volume 2",
         thumbnailFileName=os.path.join(iconsPath, "seqseg2.png"),
         # Download URL and target file name - using existing test data
@@ -157,6 +158,14 @@ class seqsegParameterNode:
     fold: Annotated[str, Choice(["all", "0", "1", "2", "3", "4"])] = "all"  # Fold to use for nnUNet model
     outputDirectory: str = ""  # Directory for SeqSeg outputs (data_dir)
     outputSegmentation: str = ""  # Segmentation node ID
+
+
+# Train dataset ids exposed in the module UI (must match seqseg.ui trainDatasetComboBox items)
+KNOWN_TRAIN_DATASETS = (
+    "Dataset005_SEQAORTANDFEMOMR",
+    "Dataset006_SEQAORTANDFEMOCT",
+    "Dataset010_SEQCOROASOCACT",
+)
 
 
 #
@@ -254,11 +263,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             logging.warning("Could not connect nnUNet type combo box signal")
 
+        # Connect train dataset combo box to sync with parameter node
+        if hasattr(self.ui, 'trainDatasetComboBox') and hasattr(self.ui.trainDatasetComboBox, 'currentTextChanged'):
+            self.ui.trainDatasetComboBox.currentTextChanged.connect(self.onTrainDatasetChanged)
+            logging.info("Connected train dataset combo box signal")
+        else:
+            logging.warning("Could not connect train dataset combo box signal")
+
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
         
         # Initialize status updates
-        self._updateStatusMessage("Ready to run SeqSeg")
+        self._updateStatusMessage("Ready to run vessel segmentation")
 
     def _updateStatusMessage(self, message: str, isError: bool = False) -> None:
         """Update the status label with current operation status."""
@@ -403,7 +419,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if suggestions:
                 self._updateStatusMessage(f"Ready to run! Tip: {suggestions[0]}")
             else:
-                self._updateStatusMessage("Ready to run SeqSeg - All requirements met!")
+                self._updateStatusMessage("Ready for vessel segmentation — all requirements met!")
 
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
@@ -473,6 +489,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             logging.info(f"Updated nnUNet Type from UI: '{ui_nnunet_type}'")
                 except Exception as e:
                     logging.warning(f"Could not read nnUNet type from UI: {e}")
+
+            if hasattr(self.ui, "trainDatasetComboBox"):
+                try:
+                    ui_train_ds = self.ui.trainDatasetComboBox.currentText
+                    if ui_train_ds and ui_train_ds != trainDataset:
+                        logging.info(f"Train Dataset mismatch - Parameter: '{trainDataset}', UI: '{ui_train_ds}'")
+                        if ui_train_ds in KNOWN_TRAIN_DATASETS:
+                            trainDataset = ui_train_ds
+                            self._parameterNode.trainDataset = ui_train_ds
+                            logging.info(f"Updated Train Dataset from UI: '{ui_train_ds}'")
+                except Exception as e:
+                    logging.warning(f"Could not read train dataset from UI: {e}")
             
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
@@ -567,6 +595,12 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._parameterNode.nnunetType = nnunet_type
             logging.info(f"nnUNet Type updated to: {nnunet_type}")
 
+    def onTrainDatasetChanged(self, train_dataset: str) -> None:
+        """Called when train dataset combo box changes - sync with parameter node."""
+        if self._parameterNode and train_dataset:
+            self._parameterNode.trainDataset = train_dataset
+            logging.info(f"Train Dataset updated to: {train_dataset}")
+
     def _syncUiWithParameterNode(self) -> None:
         """Manually sync UI controls with parameter node values."""
         if not self._parameterNode:
@@ -628,6 +662,24 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         logging.warning(f"nnUNet type '{current_type}' not found in combo box options")
             except Exception as e:
                 logging.warning(f"Could not sync nnUNet type to UI: {e}")
+
+        # Sync train dataset combo box (backup for parameter binding)
+        if hasattr(self.ui, 'trainDatasetComboBox') and self._parameterNode.trainDataset:
+            try:
+                current_ds = self._parameterNode.trainDataset
+                combo_box = self.ui.trainDatasetComboBox
+                if combo_box.currentText != current_ds:
+                    index = combo_box.findText(current_ds)
+                    if index >= 0:
+                        combo_box.setCurrentIndex(index)
+                        logging.info(f"Synced train dataset to UI: {current_ds}")
+                    else:
+                        logging.warning(
+                            f"Train dataset '{current_ds}' not in combo options; "
+                            f"parameter kept, UI may not match until you pick a listed dataset."
+                        )
+            except Exception as e:
+                logging.warning(f"Could not sync train dataset to UI: {e}")
 
     def onCreateSeedPointsButton(self) -> None:
         """Create or reset default seed points when user clicks the button."""
@@ -828,6 +880,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             train_note = self._sync_train_dataset_for_weights_profile(
                                 weights_profile, mode="use_existing"
                             )
+                            self._syncUiWithParameterNode()
                         slicer.util.infoDisplay(
                             f"Using existing weights at:\n{weights_path}{train_note}"
                         )
@@ -868,6 +921,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     train_note = self._sync_train_dataset_for_weights_profile(
                         weights_profile, mode="fresh_download"
                     )
+                    self._syncUiWithParameterNode()
                     slicer.util.infoDisplay(
                         f"Successfully downloaded and extracted model weights to:\n{weights_path}\n\n"
                         f"The nnUNet Results Path has been updated automatically.{train_note}",
