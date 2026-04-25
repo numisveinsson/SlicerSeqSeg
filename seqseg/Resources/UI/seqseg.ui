@@ -422,7 +422,7 @@
       <item row="3" column="1">
        <widget class="QComboBox" name="trainDatasetComboBox">
         <property name="toolTip">
-         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path)</string>
+         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path). Training voxel spacing: Dataset005 and Dataset006 were trained in cm units; Dataset010 was trained in mm. Match Image Unit and Scale in Advanced Parameters accordingly.</string>
         </property>
         <property name="editable">
          <bool>false</bool>
@@ -447,14 +447,27 @@
         </item>
        </widget>
       </item>
-      <item row="4" column="0">
+      <item row="4" column="0" colspan="2">
+       <widget class="QLabel" name="trainDatasetUnitsHintLabel">
+        <property name="text">
+         <string>Dataset005_SEQAORTANDFEMOMR and Dataset006_SEQAORTANDFEMOCT were trained on cm-scale data; Dataset010_SEQCOROASOCACT was trained on mm-scale data. Set Image Unit and Scale under Advanced Parameters to match your volume and the model.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
        <widget class="QLabel" name="foldLabel">
         <property name="text">
          <string>Fold:</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="1">
+      <item row="5" column="1">
        <widget class="QComboBox" name="foldComboBox">
         <property name="toolTip">
          <string>Which fold to use for nnUNet model</string>

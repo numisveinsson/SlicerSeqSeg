@@ -270,6 +270,20 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             logging.warning("Could not connect train dataset combo box signal")
 
+        # QSpinBox values are not always pushed to the parameter node by connectGui; sync explicitly.
+        for spin_name, handler, label in (
+            ("maxStepsSpinBox", self.onMaxStepsChanged, "Nr. of Steps"),
+            ("maxBranchesSpinBox", self.onMaxBranchesChanged, "Max branches"),
+            ("maxStepsPerBranchSpinBox", self.onMaxStepsPerBranchChanged, "Max steps per branch"),
+        ):
+            if hasattr(self.ui, spin_name):
+                spin = getattr(self.ui, spin_name)
+                try:
+                    spin.connect("valueChanged(int)", handler)
+                    logging.info(f"Connected {spin_name} ({label})")
+                except Exception as e:
+                    logging.warning(f"Could not connect {spin_name}: {e}")
+
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
         
@@ -449,6 +463,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             seedPoint2Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint2) 
             radiusEstimate = self._parameterNode.radiusEstimate
             maxSteps = self._parameterNode.maxSteps
+            maxBranches = self._parameterNode.maxBranches
+            maxStepsPerBranch = self._parameterNode.maxStepsPerBranch
             imageUnit = self._parameterNode.imageUnit
             nnunetResultsPath = self._parameterNode.nnunetResultsPath
             nnunetType = self._parameterNode.nnunetType
@@ -501,6 +517,26 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             logging.info(f"Updated Train Dataset from UI: '{ui_train_ds}'")
                 except Exception as e:
                     logging.warning(f"Could not read train dataset from UI: {e}")
+
+            # Spin boxes: read current UI values before run (connectGui may not update the parameter node).
+            if hasattr(self.ui, "maxStepsSpinBox"):
+                try:
+                    maxSteps = int(self.ui.maxStepsSpinBox.value)
+                    self._parameterNode.maxSteps = maxSteps
+                except Exception as e:
+                    logging.warning(f"Could not read Nr. of Steps from UI: {e}")
+            if hasattr(self.ui, "maxBranchesSpinBox"):
+                try:
+                    maxBranches = int(self.ui.maxBranchesSpinBox.value)
+                    self._parameterNode.maxBranches = maxBranches
+                except Exception as e:
+                    logging.warning(f"Could not read max branches from UI: {e}")
+            if hasattr(self.ui, "maxStepsPerBranchSpinBox"):
+                try:
+                    maxStepsPerBranch = int(self.ui.maxStepsPerBranchSpinBox.value)
+                    self._parameterNode.maxStepsPerBranch = maxStepsPerBranch
+                except Exception as e:
+                    logging.warning(f"Could not read max steps per branch from UI: {e}")
             
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
@@ -514,6 +550,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info(f"nnUNet Type (final): '{nnunetType}'")
             logging.info(f"Train Dataset: '{trainDataset}'")
             logging.info(f"Fold: '{fold}'")
+            logging.info(f"Nr. of Steps: {maxSteps}, Max branches: {maxBranches}, Max steps/branch: {maxStepsPerBranch}")
             outputDirectory = self._parameterNode.outputDirectory
             logging.info(f"Output directory from parameter node: '{outputDirectory}'")
             
@@ -553,7 +590,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Run SeqSeg segmentation
             self._updateStatusMessage("Running SeqSeg algorithm...")
             self.logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
-                               maxSteps, self._parameterNode.maxBranches, self._parameterNode.maxStepsPerBranch,
+                               maxSteps, maxBranches, maxStepsPerBranch,
                                imageUnit, self._parameterNode.scale, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
                                fold, outputDirectory, outputSegmentationNode)
                                    
@@ -600,6 +637,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self._parameterNode and train_dataset:
             self._parameterNode.trainDataset = train_dataset
             logging.info(f"Train Dataset updated to: {train_dataset}")
+
+    def onMaxStepsChanged(self, value: int) -> None:
+        if self._parameterNode is not None:
+            self._parameterNode.maxSteps = int(value)
+
+    def onMaxBranchesChanged(self, value: int) -> None:
+        if self._parameterNode is not None:
+            self._parameterNode.maxBranches = int(value)
+
+    def onMaxStepsPerBranchChanged(self, value: int) -> None:
+        if self._parameterNode is not None:
+            self._parameterNode.maxStepsPerBranch = int(value)
 
     def _syncUiWithParameterNode(self) -> None:
         """Manually sync UI controls with parameter node values."""
@@ -680,6 +729,23 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         )
             except Exception as e:
                 logging.warning(f"Could not sync train dataset to UI: {e}")
+
+        # Sync integer spin boxes when parameter node was restored or updated in code
+        for attr, spin_name in (
+            ("maxSteps", "maxStepsSpinBox"),
+            ("maxBranches", "maxBranchesSpinBox"),
+            ("maxStepsPerBranch", "maxStepsPerBranchSpinBox"),
+        ):
+            if not hasattr(self.ui, spin_name):
+                continue
+            try:
+                want = int(getattr(self._parameterNode, attr))
+                spin = getattr(self.ui, spin_name)
+                if int(spin.value) != want:
+                    spin.setValue(want)
+                    logging.info(f"Synced {attr} to UI: {want}")
+            except Exception as e:
+                logging.warning(f"Could not sync {attr} to UI: {e}")
 
     def onCreateSeedPointsButton(self) -> None:
         """Create or reset default seed points when user clicks the button."""
