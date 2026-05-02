@@ -31,6 +31,15 @@ except ImportError:
     vtkMRMLSegmentationNode = None
 
 
+def _normalize_loaded_volume_node(loaded):
+    """Return a single volume node from slicer.util.loadVolume/loadLabelVolume (node or list)."""
+    if loaded is None:
+        return None
+    if isinstance(loaded, (list, tuple)):
+        return loaded[0] if loaded else None
+    return loaded
+
+
 #
 # seqseg
 #
@@ -632,7 +641,9 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                imageUnit, self._parameterNode.scale, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
                                fold, outputDirectory, outputSegmentationNode)
                                    
-            self._updateStatusMessage("SeqSeg completed successfully! Use visualization buttons to view results.")
+            self._updateStatusMessage(
+                _("SeqSeg finished — segmentation loaded and overlaid on the input volume in slice views.")
+            )
                 
         except InstallError as e:
             logging.error(f"SeqSeg dependency installation failed: {e}")
@@ -1089,6 +1100,10 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             
             # Use the standardized loading method
             if self._loadSegmentationFile(latest_seg, update_parameter_node=True):
+                seg_node = slicer.mrmlScene.GetNodeByID(self._parameterNode.outputSegmentation)
+                vol_node = self._parameterNode.inputVolume if self._parameterNode else None
+                if seg_node and vol_node:
+                    self.logic.showSegmentationOverVolume(seg_node, vol_node)
                 slicer.util.infoDisplay(f"Loaded segmentation: {seg_files[0]}")
             else:
                 slicer.util.errorDisplay("Failed to load segmentation file.")
@@ -1212,8 +1227,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             filename = os.path.basename(segmentation_file_path)
             segmentation_name = f"SeqSeg_Segmentation_{filename.split('.')[0]}"
             
-            # Load the segmentation as a temporary volume first
-            temp_volume = slicer.util.loadVolume(segmentation_file_path)
+            # Load as labelmap volume — ImportLabelmapToSegmentationNode requires vtkMRMLLabelMapVolumeNode
+            temp_volume = _normalize_loaded_volume_node(slicer.util.loadLabelVolume(segmentation_file_path))
             if not temp_volume:
                 logging.error(f"Failed to load segmentation file as volume: {segmentation_file_path}")
                 return False
@@ -1457,6 +1472,27 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         except importlib.metadata.PackageNotFoundError:
             raise InstallError(_("SeqSeg Python package installation failed. See the Python console for pip output."))
 
+    def showSegmentationOverVolume(self, segmentationNode, volumeNode, overlayOpacity=0.45):
+        """Bind segmentation geometry to an image volume and show both in slice viewers (overlay)."""
+        if not segmentationNode or not volumeNode:
+            logging.warning("showSegmentationOverVolume: missing segmentation or volume node")
+            return
+        segmentationNode.SetNodeReferenceID(
+            segmentationNode.GetReferenceImageGeometryReferenceRole(),
+            volumeNode.GetID(),
+        )
+        segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(volumeNode)
+        segmentationNode.CreateDefaultDisplayNodes()
+        displayNode = segmentationNode.GetDisplayNode()
+        if displayNode:
+            displayNode.SetVisibility(True)
+            displayNode.SetOpacity(overlayOpacity)
+            if hasattr(displayNode, "Visibility2DOn"):
+                displayNode.Visibility2DOn()
+            elif hasattr(displayNode, "SliceIntersectionVisibilityOn"):
+                displayNode.SliceIntersectionVisibilityOn()
+        slicer.util.setSliceViewerLayers(background=volumeNode, fit=True)
+
     def loadSegmentationToNode(self, segmentation_file_path: str, outputSegmentationNode, inputVolume) -> bool:
         """
         Standardized method to load a segmentation file into an existing segmentation node.
@@ -1471,8 +1507,8 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                 logging.error(f"Segmentation file not found: {segmentation_file_path}")
                 return False
             
-            # Load the segmentation file as a temporary volume
-            temp_segmentation_node = slicer.util.loadVolume(segmentation_file_path)
+            # Load as labelmap volume for correct MRML node type when importing into segmentation
+            temp_segmentation_node = _normalize_loaded_volume_node(slicer.util.loadLabelVolume(segmentation_file_path))
             if not temp_segmentation_node:
                 logging.error(f"Failed to load segmentation file: {segmentation_file_path}")
                 return False
@@ -1495,6 +1531,12 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             
             # Clean up temporary volume node
             slicer.mrmlScene.RemoveNode(temp_segmentation_node)
+
+            outputSegmentationNode.SetNodeReferenceID(
+                outputSegmentationNode.GetReferenceImageGeometryReferenceRole(),
+                inputVolume.GetID(),
+            )
+            outputSegmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
             
             logging.info(f"Successfully loaded segmentation from: {segmentation_file_path}")
             return True
@@ -1793,17 +1835,8 @@ Output Directory: {data_dir}"""
             if not self.loadSegmentationToNode(output_file, outputSegmentationNode, inputVolume):
                 raise RuntimeError("Failed to load SeqSeg output using standardized method")
             
-            # Update display
             if showResult:
-                # Set the segmentation node to be visible in slice views
-                outputSegmentationNode.CreateDefaultDisplayNodes()
-                outputSegmentationNode.GetDisplayNode().SetVisibility(True)
-                
-                # Set the background volume in slice views
-                slicer.util.setSliceViewerLayers(background=inputVolume)
-                
-                # Fit slice views to show the segmentation
-                slicer.util.resetSliceViews()
+                self.showSegmentationOverVolume(outputSegmentationNode, inputVolume)
                 
             logging.info("SeqSeg segmentation completed successfully")
 
