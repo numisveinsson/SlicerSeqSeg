@@ -1,6 +1,9 @@
 import json
 import logging
 import os
+import re
+import subprocess
+import sys
 from typing import Annotated, Optional
 
 import vtk
@@ -42,13 +45,15 @@ class seqseg(ScriptedLoadableModule):
         ScriptedLoadableModule.__init__(self, parent)
         self.parent.title = _("SeqSeg Vessel Segmentation")
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Segmentation")]
+        # Keep empty: declaring PyTorch/NNUNet here makes Slicer load them before seqseg opens; if they are missing or fail,
+        # the module never loads and setupPythonRequirements cannot show install guidance (Total Segmentator uses [] too).
         self.parent.dependencies = []
         self.parent.contributors = ["Numi Sveinsson Cepero (UC Berkeley & UT Austin)"]
         # _() function marks text as translatable to other languages
         self.parent.helpText = _("""
 SeqSeg Vessel Segmentation is a seed-based vascular segmentation module for 3D Slicer. It uses the SeqSeg Python package,
 requires two seed points and a volume as input, and produces a segmentation, surface mesh, and centerline.
-Pretrained nnUNet weights are installed with the <b>Download Aorta Weights (CT/MR)</b> and <b>Download Coronary CT Weights</b> buttons in <b>nnUNet Configuration</b> (pick a folder when asked)—no separate model training for routine use.
+The first run installs Python dependencies via the <b>PyTorch</b> and <b>Slicer NNUNet</b> extensions (from Extension Manager); pretrained nnUNet weights use the <b>Download Aorta Weights (CT/MR)</b> and <b>Download Coronary CT Weights</b> buttons in <b>nnUNet Configuration</b>.
 See more information in <a href="https://github.com/numisveinsson/SeqSeg">SeqSeg package documentation</a>.
 """)
         self.parent.acknowledgementText = _("""
@@ -68,12 +73,15 @@ Cite: Sveinsson Cepero, N., Shadden, S.C. SeqSeg: Learning Local Segments for Au
     
     def _checkDependencies(self):
         """Check if required dependencies are available."""
+        import importlib.metadata
+
         try:
-            import seqseg
+            # Use distribution metadata — `import seqseg` resolves to this scripted module, not the pip package.
+            importlib.metadata.version("seqseg")
             logging.info("SeqSeg dependency check passed")
-        except ImportError:
+        except importlib.metadata.PackageNotFoundError:
             logging.warning("SeqSeg package not found. It will be installed automatically when first used.")
-            # Note: We don't fail here to allow the module to load, 
+            # Note: We don't fail here to allow the module to load,
             # dependency installation will happen when the user tries to run the algorithm
 
 
@@ -167,6 +175,18 @@ class seqsegParameterNode:
     fold: Annotated[str, Choice(["all", "0", "1", "2", "3", "4"])] = "all"  # Fold to use for nnUNet model
     outputDirectory: str = ""  # Directory for SeqSeg outputs (data_dir)
     outputSegmentation: str = ""  # Segmentation node ID
+
+
+class InstallError(Exception):
+    """Raised when dependency installation fails or requires user action (aligned with common Slicer AI-module patterns)."""
+
+    def __init__(self, message, restartRequired=False):
+        super().__init__(message)
+        self.message = message
+        self.restartRequired = restartRequired
+
+    def __str__(self):
+        return self.message
 
 
 #
@@ -614,6 +634,19 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                    
             self._updateStatusMessage("SeqSeg completed successfully! Use visualization buttons to view results.")
                 
+        except InstallError as e:
+            logging.error(f"SeqSeg dependency installation failed: {e}")
+            self._updateStatusMessage(f"SeqSeg dependencies: {str(e)}", isError=True)
+            if e.restartRequired:
+                self._updateStatusMessage(_("Application restart required to finish Python package setup."), isError=False)
+                if slicer.util.confirmOkCancelDisplay(
+                    _("Application restart is required to complete installation of required Python packages.\nPress OK to restart."),
+                    _("Confirm application restart"),
+                    detailedText=str(e),
+                ):
+                    slicer.util.restart()
+            else:
+                slicer.util.errorDisplay(_("SeqSeg dependency installation failed."), detailedText=str(e))
         except Exception as e:
             logging.error(f"SeqSeg processing failed: {e}")
             self._updateStatusMessage(f"SeqSeg failed: {str(e)}", isError=True)
@@ -1239,6 +1272,191 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return seqsegParameterNode(super().getParameterNode())
 
+    # Pin matches prior extension behavior (PyPI); installed with --no-deps then selective deps (TotalSegmentator-style).
+    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==1.0.5"
+
+    def pipInstallSelective(self, packageToInstall, installCommand, packagesToSkip):
+        """Install a Python distribution without deps, strip skipped Requires-Dist lines, then pip-install remaining requires."""
+
+        slicer.util.pip_install(f"{installCommand} --no-deps")
+        skippedRequirements = []
+
+        import importlib.metadata
+
+        metadataPath = [p for p in importlib.metadata.files(packageToInstall) if "METADATA" in str(p)][0]
+
+        filteredMetadata = ""
+        with open(metadataPath.locate(), "r+", encoding="latin1") as file:
+            for line in file:
+                skipThisPackage = False
+                requirementPrefix = "Requires-Dist: "
+                if line.startswith(requirementPrefix):
+                    for packageToSkip in packagesToSkip:
+                        if packageToSkip in line:
+                            skipThisPackage = True
+                            break
+                if skipThisPackage:
+                    skippedRequirements.append(line.removeprefix(requirementPrefix))
+                    continue
+                filteredMetadata += line
+            file.seek(0)
+            file.write(filteredMetadata)
+            file.truncate()
+
+        requirements = importlib.metadata.requires(packageToInstall)
+        if requirements is None:
+            return skippedRequirements
+
+        for requirement in requirements:
+            skipThisPackage = False
+            for packageToSkip in packagesToSkip:
+                if requirement.startswith(packageToSkip):
+                    skipThisPackage = True
+                    break
+
+            match = False
+            if not match:
+                match = re.match(r'([\S]+)[\s]*; extra == "([^"]+)"', requirement)
+                if match:
+                    requirement = f"{match.group(1)}"
+            if not match:
+                match = re.match(r"([\S]+)[\s](.+)", requirement)
+                if match:
+                    requirement = f"{match.group(1)}{match.group(2)}"
+
+            if skipThisPackage:
+                logging.info(_("Skipping dependency (provided by Slicer or installed separately): {requirement}").format(requirement=requirement))
+            else:
+                logging.info(_("Installing SeqSeg dependency: {requirement}").format(requirement=requirement))
+                slicer.util.pip_install(requirement)
+
+        return skippedRequirements
+
+    def setupPythonRequirements(self, upgrade=False):
+        """Install PyTorch (via PyTorch extension), nnUNet v2 (via Slicer NNUNet), and the seqseg PyPI package with selective deps."""
+
+        import importlib.metadata
+
+        from packaging import version as pkg_version
+        from packaging.requirements import Requirement
+
+        minimumTorchVersion = "2.1.2"
+        minimumTorchVisionVersion = "0.16.2"
+
+        if sys.platform == "darwin":
+            minimumNNUNetVersion = "2.7.0"
+            numpy_version_str = importlib.metadata.version("numpy")
+            if pkg_version.parse(numpy_version_str) >= pkg_version.parse("2.0.0"):
+                slicer.util.pip_install("numpy<2")
+        else:
+            minimumNNUNetVersion = "2.3.1"
+
+        packagesToSkip = [
+            "SimpleITK",
+            "torch",
+            "torchvision",
+            "nnunetv2",
+            "requests",
+            "rt_utils",
+        ]
+
+        confirmPackagesToInstall = []
+
+        try:
+            import PyTorchUtils  # noqa: F401
+        except ModuleNotFoundError:
+            raise InstallError(
+                _(
+                    "This module requires the PyTorch extension (module PyTorchUtils).\n\n"
+                    "In Slicer: View → Extension Manager → search PyTorch → Install → restart Slicer if prompted.\n"
+                    "After installing SeqSeg Vessel Segmentation from the catalog, PyTorch should install automatically as a dependency."
+                )
+            )
+
+        torchLogic = PyTorchUtils.PyTorchUtilsLogic()
+        if not torchLogic.torchInstalled():
+            confirmPackagesToInstall.append("PyTorch")
+
+        try:
+            import SlicerNNUNetLib  # noqa: F401
+        except ModuleNotFoundError:
+            raise InstallError(
+                _(
+                    "This module requires the NNUNet extension (module SlicerNNUNetLib).\n\n"
+                    "In Slicer: View → Extension Manager → search NNUNet → Install → restart Slicer if prompted.\n"
+                    "After installing SeqSeg Vessel Segmentation from the catalog, NNUNet should install automatically as a dependency."
+                )
+            )
+
+        nnunetlogic = SlicerNNUNetLib.InstallLogic(doAskConfirmation=False)
+        nnunetlogic.getInstalledNNUnetVersion()
+
+        if not nnunetlogic.isPackageInstalled(Requirement("nnunetv2")):
+            confirmPackagesToInstall.append("nnunetv2")
+
+        if confirmPackagesToInstall:
+            if not slicer.util.confirmOkCancelDisplay(
+                _("This module requires installation of additional Python packages. Installation needs a network connection and may take several minutes. Click OK to proceed."),
+                _("Confirm Python package installation"),
+                detailedText=_("Python packages that will be installed: {package_list}").format(
+                    package_list=", ".join(confirmPackagesToInstall)
+                ),
+            ):
+                raise InstallError(_("User cancelled installation."), restartRequired=False)
+
+        if "PyTorch" in confirmPackagesToInstall:
+            logging.info(_("Installing PyTorch Python packages (may take several minutes)..."))
+            torch_result = torchLogic.installTorch(
+                askConfirmation=False,
+                torchVersionRequirement=f">={minimumTorchVersion}",
+                torchVisionVersionRequirement=f">={minimumTorchVisionVersion}",
+            )
+            if torch_result is None:
+                raise InstallError(_("PyTorch installation failed. Install the PyTorch extension from the Extensions Manager."))
+        else:
+            if pkg_version.parse(torchLogic.torch.__version__) < pkg_version.parse(minimumTorchVersion):
+                raise InstallError(
+                    _("PyTorch version {current} is below the minimum ({minimum}). Use the PyTorch Util module to install a compatible build.").format(
+                        current=torchLogic.torch.__version__,
+                        minimum=minimumTorchVersion,
+                    )
+                )
+
+        if "nnunetv2" in confirmPackagesToInstall:
+            logging.info(_("Installing nnunetv2 (may take several minutes)..."))
+            nnunet_ok = nnunetlogic.setupPythonRequirements(f"nnunetv2>={minimumNNUNetVersion}")
+            if not nnunet_ok:
+                raise InstallError(_("nnUNet v2 installation failed. Install the Slicer NNUNet extension from the Extensions Manager."))
+        else:
+            installed_nnunet_version = nnunetlogic.getInstalledNNUnetVersion()
+            if installed_nnunet_version < pkg_version.parse(minimumNNUNetVersion):
+                raise InstallError(
+                    _("nnUNet v2 version {current} is below the minimum ({minimum}). Use the nnUNet module to install a compatible version.").format(
+                        current=installed_nnunet_version,
+                        minimum=minimumNNUNetVersion,
+                    )
+                )
+
+        need_install = False
+        try:
+            importlib.metadata.version("seqseg")
+        except importlib.metadata.PackageNotFoundError:
+            need_install = True
+
+        if upgrade:
+            slicer.util.pip_uninstall("seqseg")
+            need_install = True
+
+        if need_install:
+            logging.info(_("Installing SeqSeg Python package ({spec})...").format(spec=self.SEQSEG_PYTHON_PACKAGE_SPECIFIER))
+            install_command = self.SEQSEG_PYTHON_PACKAGE_SPECIFIER + (" --upgrade" if upgrade else "")
+            self.pipInstallSelective("seqseg", install_command, packagesToSkip)
+
+        try:
+            importlib.metadata.version("seqseg")
+        except importlib.metadata.PackageNotFoundError:
+            raise InstallError(_("SeqSeg Python package installation failed. See the Python console for pip output."))
+
     def loadSegmentationToNode(self, segmentation_file_path: str, outputSegmentationNode, inputVolume) -> bool:
         """
         Standardized method to load a segmentation file into an existing segmentation node.
@@ -1388,75 +1606,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         logging.info("SeqSeg processing started")
 
         try:
-            # Check if SeqSeg package is available
-            try:
-                import subprocess
-                import sys
-                import shutil
-                
-                # Test if seqseg command is available
-                result = subprocess.run([sys.executable, "-c", "import seqseg"], 
-                                      capture_output=True, text=True)
-                if result.returncode != 0:
-                    logging.warning("SeqSeg package not found, attempting to install with version constraints...")
-                    
-                    # First, check what's already installed to understand constraints
-                    logging.info("Checking existing package versions...")
-                    for check_pkg in ["torch", "numpy", "seqseg"]:
-                        check_result = subprocess.run([sys.executable, "-m", "pip", "show", check_pkg], 
-                                                    capture_output=True, text=True)
-                        if check_result.returncode == 0:
-                            # Extract version from pip show output
-                            for line in check_result.stdout.split('\n'):
-                                if line.startswith('Version:'):
-                                    version = line.split('Version:')[1].strip()
-                                    logging.info(f"Currently installed {check_pkg}: {version}")
-                                    break
-                        else:
-                            logging.info(f"{check_pkg} not currently installed")
-                    
-                    # Install packages with specific version constraints to ensure compatibility
-                    packages_to_install = [
-                        "torch",
-                        "numpy<2.0",
-                        "nnunetv2<2.3",
-                        "seqseg==1.0.1",
-                    ]
-                    
-                    for package in packages_to_install:
-                        logging.info(f"Installing {package}...")
-                        
-                        # Run pip install with verbose output to see what's happening
-                        install_result = subprocess.run(
-                            [sys.executable, "-m", "pip", "install", package, "--verbose"], 
-                            capture_output=True, text=True
-                        )
-                        
-                        if install_result.returncode == 0:
-                            logging.info(f"✓ {package} installed successfully")
-                        else:
-                            logging.error(f"✗ Failed to install {package}")
-                            logging.error(f"Stderr: {install_result.stderr}")
-                            logging.error(f"Stdout: {install_result.stdout}")
-                        
-                        # Check what version actually got installed
-                        pkg_name = package.split('>=')[0].split('==')[0]
-                        verify_result = subprocess.run([sys.executable, "-m", "pip", "show", pkg_name], 
-                                                     capture_output=True, text=True)
-                        if verify_result.returncode == 0:
-                            for line in verify_result.stdout.split('\n'):
-                                if line.startswith('Version:'):
-                                    actual_version = line.split('Version:')[1].strip()
-                                    logging.info(f"Actually installed {pkg_name}: {actual_version}")
-                                    break
-                    
-                    logging.info("All SeqSeg dependencies installation completed")
-                else:
-                    logging.info("SeqSeg package is available")
-                    
-            except subprocess.CalledProcessError as install_error:
-                logging.error(f"Failed to install SeqSeg package: {install_error}")
-                raise ImportError("SeqSeg package installation failed. Please install it manually using: pip install seqseg")
+            self.setupPythonRequirements()
 
             # Use the specified output directory as data_dir
             data_dir = outputDirectory
@@ -1657,6 +1807,8 @@ Output Directory: {data_dir}"""
                 
             logging.info("SeqSeg segmentation completed successfully")
 
+        except InstallError:
+            raise
         except Exception as e:
             logging.error(f"SeqSeg processing failed: {e}")
             raise
@@ -1740,6 +1892,9 @@ class seqsegTest(ScriptedLoadableModuleTest):
                            maxSteps, 2, 5, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
                            fold, outputDirectory, outputSegmentation)
             self.delayDisplay("SeqSeg algorithm completed successfully")
+        except InstallError as e:
+            logging.info(f"SeqSeg dependency setup failed or incomplete for testing: {e}")
+            self.delayDisplay(f"SeqSeg dependencies not satisfied - skipping algorithm run: {e}")
         except ImportError as e:
             # This is expected if SeqSeg package is not installed
             logging.info(f"SeqSeg package not available for testing: {e}")

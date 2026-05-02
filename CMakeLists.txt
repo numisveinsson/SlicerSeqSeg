@@ -9,7 +9,8 @@ set(EXTENSION_CONTRIBUTORS "Numi Sveinsson Cepero (UT Austin)")
 set(EXTENSION_DESCRIPTION "SeqSegVesselSegmentation: 3D Slicer extension for vascular (and other tubular) seed-based segmentation using the SeqSeg Python package and nnUNet. Pretrained nnUNet weights install from the module via download buttons—no manual training.")
 set(EXTENSION_ICONURL "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/Icons/seqseg.jpg")
 set(EXTENSION_SCREENSHOTURLS "https://raw.githubusercontent.com/numisveinsson/SlicerSeqSeg/main/seqseg/Resources/screenshot/coronary.png")
-set(EXTENSION_DEPENDS "NA") # Specified as a list or "NA" if no dependencies
+# PyTorch and NNUNet extensions supply PyTorchUtils and SlicerNNUNetLib used by setupPythonRequirements().
+set(EXTENSION_DEPENDS "PyTorch NNUNet")
 
 # Python package dependencies
 set(EXTENSION_BUILD_SUBDIRECTORY ".")
