@@ -129,6 +129,15 @@ def registerSampleData():
 # seqsegParameterNode
 #
 
+# Train dataset ids exposed in the module UI (must match seqseg.ui trainDatasetComboBox items)
+KNOWN_TRAIN_DATASETS = (
+    "Dataset005_SEQAORTANDFEMOMR",
+    "Dataset006_SEQAORTANDFEMOCT",
+    "Dataset010_SEQCOROASOCACT",
+    "Dataset091_VMR_FONTAN_003MR",
+    "Dataset090_VMR_FONTAN_ORIGMR"
+)
+
 
 @parameterNodeWrapper
 class seqsegParameterNode:
@@ -154,18 +163,10 @@ class seqsegParameterNode:
     coordinateSystem: Annotated[str, Choice(["LPS World", "RAS World"])] = "LPS World"  # Coordinate system for seed points
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
     nnunetType: Annotated[str, Choice(["3d_fullres", "2d"])] = "3d_fullres"  # Type of nnUNet model
-    trainDataset: str = "Dataset005_SEQAORTANDFEMOMR"  # Training dataset name
+    trainDataset: Annotated[str, Choice(list(KNOWN_TRAIN_DATASETS))] = "Dataset005_SEQAORTANDFEMOMR"  # Training dataset name
     fold: Annotated[str, Choice(["all", "0", "1", "2", "3", "4"])] = "all"  # Fold to use for nnUNet model
     outputDirectory: str = ""  # Directory for SeqSeg outputs (data_dir)
     outputSegmentation: str = ""  # Segmentation node ID
-
-
-# Train dataset ids exposed in the module UI (must match seqseg.ui trainDatasetComboBox items)
-KNOWN_TRAIN_DATASETS = (
-    "Dataset005_SEQAORTANDFEMOMR",
-    "Dataset006_SEQAORTANDFEMOCT",
-    "Dataset010_SEQCOROASOCACT",
-)
 
 
 #
@@ -376,6 +377,22 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Create default seed points if they don't exist
         self._createDefaultSeedPoints()
 
+    def _populateTrainDatasetComboFromKnown(self) -> None:
+        """Rebuild Train Dataset combo items from KNOWN_TRAIN_DATASETS.
+
+        Slicer's parameter node GUI connector treats the combo's items as the allowed Choice()
+        values. Scene MRML can restore trainDataset strings that are absent from an outdated
+        .ui file unless we sync items here before connectGui().
+        """
+        if not getattr(self, "ui", None) or not hasattr(self.ui, "trainDatasetComboBox"):
+            return
+        combo = self.ui.trainDatasetComboBox
+        combo.blockSignals(True)
+        combo.clear()
+        for ds in KNOWN_TRAIN_DATASETS:
+            combo.addItem(ds)
+        combo.blockSignals(False)
+
     def setParameterNode(self, inputParameterNode: Optional[seqsegParameterNode]) -> None:
         """
         Set and observe parameter node.
@@ -387,6 +404,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
         self._parameterNode = inputParameterNode
         if self._parameterNode:
+            self._populateTrainDatasetComboFromKnown()
             # Note: in the .ui file, a Qt dynamic property called "SlicerParameterName" is set on each
             # ui element that needs connection.
             self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
@@ -1717,7 +1735,7 @@ class seqsegTest(ScriptedLoadableModuleTest):
             nnunetType = "3d_fullres"
             trainDataset = "Dataset005_SEQAORTANDFEMOMR"
             fold = "all"
-            outputDirectory = "/tmp/test_seqseg_output"  # Test output directory
+            outputDirectory = "/tmp/test_seqseg_output/"  # Test output directory
             logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                            maxSteps, 2, 5, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
                            fold, outputDirectory, outputSegmentation)
