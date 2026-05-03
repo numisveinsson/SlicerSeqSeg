@@ -184,7 +184,7 @@
          <number>10000</number>
         </property>
         <property name="value">
-         <number>10</number>
+         <number>1</number>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>maxSteps</string>
@@ -202,6 +202,9 @@
        <widget class="QComboBox" name="unitComboBox">
         <property name="toolTip">
          <string>Unit of the medical image</string>
+        </property>
+        <property name="currentIndex">
+         <number>1</number>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>imageUnit</string>
@@ -285,7 +288,7 @@
          <number>100</number>
         </property>
         <property name="value">
-         <number>2</number>
+         <number>1</number>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>maxBranches</string>
@@ -311,7 +314,7 @@
          <number>1000</number>
         </property>
         <property name="value">
-         <number>5</number>
+         <number>20</number>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>maxStepsPerBranch</string>

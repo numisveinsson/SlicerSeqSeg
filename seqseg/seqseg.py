@@ -172,10 +172,10 @@ class seqsegParameterNode:
     seedPoint1: str = ""  # Markups fiducial node ID
     seedPoint2: str = ""  # Markups fiducial node ID
     radiusEstimate: Annotated[float, WithinRange(0.1, 30.0)] = 1.0  # Radius in mm
-    maxSteps: Annotated[int, WithinRange(1, 10000)] = 10  # Max segmentation steps
-    maxBranches: Annotated[int, WithinRange(1, 50)] = 2  # Max number of branches
-    maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 5  # Max steps per branch
-    imageUnit: Annotated[str, Choice(["mm", "cm"])] = "mm"  # Image unit (mm or cm)
+    maxSteps: Annotated[int, WithinRange(1, 10000)] = 1  # Max segmentation steps
+    maxBranches: Annotated[int, WithinRange(1, 50)] = 1  # Max number of branches
+    maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 20  # Max steps per branch
+    imageUnit: Annotated[str, Choice(["mm", "cm"])] = "cm"  # Image unit (mm or cm)
     scale: Annotated[str, Choice(["0.1", "1", "10"])] = "1"  # SeqSeg -scale vs. nnUNet training units
     coordinateSystem: Annotated[str, Choice(["LPS World", "RAS World"])] = "LPS World"  # Coordinate system for seed points
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
@@ -1359,7 +1359,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         minimumTorchVisionVersion = "0.16.2"
 
         if sys.platform == "darwin":
-            minimumNNUNetVersion = "2.7.0"
+            minimumNNUNetVersion = "2.5.0"
             numpy_version_str = importlib.metadata.version("numpy")
             if pkg_version.parse(numpy_version_str) >= pkg_version.parse("2.0.0"):
                 slicer.util.pip_install("numpy<2")
@@ -1914,7 +1914,7 @@ class seqsegTest(ScriptedLoadableModuleTest):
         try:
             # This will likely fail if SeqSeg package is not installed, which is expected
             radiusEstimate = 5.0  # Test radius in cm
-            maxSteps = 10
+            maxSteps = 1
             imageUnit = "cm"
             nnunetResultsPath = "/tmp/test_nnunet_results"  # Test path
             nnunetType = "3d_fullres"
@@ -1922,7 +1922,7 @@ class seqsegTest(ScriptedLoadableModuleTest):
             fold = "all"
             outputDirectory = "/tmp/test_seqseg_output/"  # Test output directory
             logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
-                           maxSteps, 2, 5, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
+                           maxSteps, 1, 20, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
                            fold, outputDirectory, outputSegmentation)
             self.delayDisplay("SeqSeg algorithm completed successfully")
         except InstallError as e:
