@@ -40,8 +40,8 @@ Extension dependencies are declared in **`CMakeLists.txt`** (`EXTENSION_DEPENDS`
 The **SeqSeg Vessel Segmentation** module does **not** ship PyTorch or nnUNet wheels inside its own installer. When you click **Run SeqSeg** for the first time (or until dependencies are satisfied), the module:
 
 1. May ask you to confirm installation of extra Python packages (network required).
-2. Installs **PyTorch** via the PyTorch extension’s installer (minimum versions aligned with common nnUNet stacks, e.g. PyTorch ≥ 2.1.2 with matching torchvision).
-3. Installs **`nnunetv2`** via the **Slicer NNUNet** extension’s installer (minimum version depends on platform; macOS uses a higher floor than Linux/Windows).
+2. Installs **PyTorch** via the PyTorch extension’s installer (**`torch` 2.2.2**).
+3. Installs **`nnunetv2` 2.5.1** via the **Slicer NNUNet** extension’s installer (same version on all platforms).
 4. Installs the **`seqseg`** PyPI package (**`seqseg==1.0.4`**) using **`slicer.util.pip_install`**, first with **`--no-deps`**, then installs declared dependencies selectively—**skipping** packages that must stay under Slicer’s control (**SimpleITK**, **torch**, **torchvision**, **nnunetv2**, **requests**, **rt_utils**), same pattern as extensions such as **Total Segmentator**.
 
 You may need to **restart Slicer** once after PyTorch or other packages are installed; follow any prompt the module shows.

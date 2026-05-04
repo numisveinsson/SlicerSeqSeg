@@ -204,19 +204,19 @@
          <string>Unit of the medical image</string>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>imageUnit</string>
         </property>
         <item>
          <property name="text">
-          <string>mm</string>
+          <string>cm</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>cm</string>
+          <string>mm</string>
          </property>
         </item>
        </widget>

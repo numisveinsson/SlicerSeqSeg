@@ -175,7 +175,7 @@ class seqsegParameterNode:
     maxSteps: Annotated[int, WithinRange(1, 10000)] = 1  # Max segmentation steps
     maxBranches: Annotated[int, WithinRange(1, 50)] = 1  # Max number of branches
     maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 20  # Max steps per branch
-    imageUnit: Annotated[str, Choice(["mm", "cm"])] = "cm"  # Image unit (mm or cm)
+    imageUnit: Annotated[str, Choice(["cm", "mm"])] = "cm"  # Image unit (mm or cm); cm first — MRML/connectGui often defaults to first Choice()
     scale: Annotated[str, Choice(["0.1", "1", "10"])] = "1"  # SeqSeg -scale vs. nnUNet training units
     coordinateSystem: Annotated[str, Choice(["LPS World", "RAS World"])] = "LPS World"  # Coordinate system for seed points
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
@@ -590,9 +590,9 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             
             # Validate image unit - should be automatically synced via parameter binding
             if imageUnit not in ["mm", "cm"]:
-                logging.warning(f"Invalid image unit '{imageUnit}', defaulting to 'mm'")
-                imageUnit = "mm"
-                self._parameterNode.imageUnit = "mm"
+                logging.warning(f"Invalid image unit '{imageUnit}', defaulting to 'cm'")
+                imageUnit = "cm"
+                self._parameterNode.imageUnit = "cm"
             
             logging.info(f"nnUNet Type (final): '{nnunetType}'")
             logging.info(f"Train Dataset: '{trainDataset}'")
@@ -1104,7 +1104,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 vol_node = self._parameterNode.inputVolume if self._parameterNode else None
                 if seg_node and vol_node:
                     self.logic.showSegmentationOverVolume(seg_node, vol_node)
-                slicer.util.infoDisplay(f"Loaded segmentation: {seg_files[0]}")
+                logging.info(f"Loaded segmentation: {seg_files[0]}")
             else:
                 slicer.util.errorDisplay("Failed to load segmentation file.")
                 
@@ -1140,7 +1140,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Load the surface mesh
             mesh_node = slicer.util.loadModel(latest_mesh)
             if mesh_node:
-                slicer.util.infoDisplay(f"Loaded surface mesh: {mesh_files[0]}")
+                logging.info(f"Loaded surface mesh: {mesh_files[0]}")
                 # Make sure it's visible in 3D view
                 mesh_node.GetDisplayNode().SetVisibility(True)
                 mesh_node.GetDisplayNode().SetColor(1, 0, 0)  # Set to red
@@ -1355,16 +1355,18 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         from packaging import version as pkg_version
         from packaging.requirements import Requirement
 
-        minimumTorchVersion = "2.1.2"
-        minimumTorchVisionVersion = "0.16.2"
+        requiredTorchVersion = "2.2.2"
+        requiredTorchVisionVersion = "0.17.2"
+        requiredNnunetV2Version = "2.5.1"
+        required_nnunet_v = pkg_version.parse(requiredNnunetV2Version)
+
+        def _torch_base_matches(version_str):
+            return pkg_version.parse(version_str).base_version == requiredTorchVersion
 
         if sys.platform == "darwin":
-            minimumNNUNetVersion = "2.5.0"
             numpy_version_str = importlib.metadata.version("numpy")
             if pkg_version.parse(numpy_version_str) >= pkg_version.parse("2.0.0"):
                 slicer.util.pip_install("numpy<2")
-        else:
-            minimumNNUNetVersion = "2.3.1"
 
         packagesToSkip = [
             "SimpleITK",
@@ -1391,6 +1393,8 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         torchLogic = PyTorchUtils.PyTorchUtilsLogic()
         if not torchLogic.torchInstalled():
             confirmPackagesToInstall.append("PyTorch")
+        elif not _torch_base_matches(torchLogic.torch.__version__):
+            confirmPackagesToInstall.append("PyTorch")
 
         try:
             import SlicerNNUNetLib  # noqa: F401
@@ -1408,6 +1412,8 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
 
         if not nnunetlogic.isPackageInstalled(Requirement("nnunetv2")):
             confirmPackagesToInstall.append("nnunetv2")
+        elif pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion())) != required_nnunet_v:
+            confirmPackagesToInstall.append("nnunetv2")
 
         if confirmPackagesToInstall:
             if not slicer.util.confirmOkCancelDisplay(
@@ -1423,32 +1429,47 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             logging.info(_("Installing PyTorch Python packages (may take several minutes)..."))
             torch_result = torchLogic.installTorch(
                 askConfirmation=False,
-                torchVersionRequirement=f">={minimumTorchVersion}",
-                torchVisionVersionRequirement=f">={minimumTorchVisionVersion}",
+                torchVersionRequirement=f"=={requiredTorchVersion}",
+                torchVisionVersionRequirement=f"=={requiredTorchVisionVersion}",
             )
             if torch_result is None:
                 raise InstallError(_("PyTorch installation failed. Install the PyTorch extension from the Extensions Manager."))
-        else:
-            if pkg_version.parse(torchLogic.torch.__version__) < pkg_version.parse(minimumTorchVersion):
+            if not _torch_base_matches(torchLogic.torch.__version__):
                 raise InstallError(
-                    _("PyTorch version {current} is below the minimum ({minimum}). Use the PyTorch Util module to install a compatible build.").format(
+                    _("PyTorch version {current} was expected after install ({required}). Use the PyTorch Util module to install a compatible build.").format(
                         current=torchLogic.torch.__version__,
-                        minimum=minimumTorchVersion,
+                        required=requiredTorchVersion,
+                    )
+                )
+        else:
+            if not _torch_base_matches(torchLogic.torch.__version__):
+                raise InstallError(
+                    _("PyTorch version {current} is required to be {required}. Use the PyTorch Util module to install a compatible build.").format(
+                        current=torchLogic.torch.__version__,
+                        required=requiredTorchVersion,
                     )
                 )
 
         if "nnunetv2" in confirmPackagesToInstall:
             logging.info(_("Installing nnunetv2 (may take several minutes)..."))
-            nnunet_ok = nnunetlogic.setupPythonRequirements(f"nnunetv2>={minimumNNUNetVersion}")
+            nnunet_ok = nnunetlogic.setupPythonRequirements(f"nnunetv2=={requiredNnunetV2Version}")
             if not nnunet_ok:
                 raise InstallError(_("nnUNet v2 installation failed. Install the Slicer NNUNet extension from the Extensions Manager."))
-        else:
-            installed_nnunet_version = nnunetlogic.getInstalledNNUnetVersion()
-            if installed_nnunet_version < pkg_version.parse(minimumNNUNetVersion):
+            installed_nnunet_version = pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion()))
+            if installed_nnunet_version != required_nnunet_v:
                 raise InstallError(
-                    _("nnUNet v2 version {current} is below the minimum ({minimum}). Use the nnUNet module to install a compatible version.").format(
+                    _("nnUNet v2 version {current} was expected after install ({required}). Use the nnUNet module to install the required version.").format(
                         current=installed_nnunet_version,
-                        minimum=minimumNNUNetVersion,
+                        required=requiredNnunetV2Version,
+                    )
+                )
+        else:
+            installed_nnunet_version = pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion()))
+            if installed_nnunet_version != required_nnunet_v:
+                raise InstallError(
+                    _("nnUNet v2 version {current} is required to be {required}. Use the nnUNet module to install the required version.").format(
+                        current=installed_nnunet_version,
+                        required=requiredNnunetV2Version,
                     )
                 )
 
