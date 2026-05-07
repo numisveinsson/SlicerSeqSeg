@@ -78,7 +78,9 @@ In 3D Slicer, use **File → Add Data**, paste the download URL, or choose the r
 
 ### Placing seed points on CTA-cardio (CT aorta)
 
-Use two fiducial markups (or **Auto-Create Seeds** in the module, then drag if needed). Place **Seed point 1** in the **ascending aorta** near the **aortic root / proximal ascending** segment, and **Seed point 2** **higher** along the same lumen toward the **arch**—both inside the contrast-filled vessel. Seed 1 is the start; seed 2 sets the initial tracking direction along the aorta.
+After the volume is in Slicer, open **SeqSeg Vessel Segmentation**, click **Auto-Create Seeds**, then **toggle on Planes visible in 3D** for the seed markups (so slice intersections show in the 3D view). Zoom into the anatomy and **drag the seed points** until they sit where you want (inside the vessel).
+
+Whether you used **Auto-Create Seeds** or the **Markups** module, you need two fiducials in the vessel. Place **Seed point 1** in the **ascending aorta** near the **aortic root / proximal ascending** segment, and **Seed point 2** **higher** along the same lumen toward the **arch**—both inside the contrast-filled vessel. Seed 1 is the start; seed 2 sets the initial tracking direction along the aorta.
 
 **Seed point 1** (red markup **SeqSeg Seed Point 1**), centered in the ascending aorta on axial / coronal / sagittal slices:
 
@@ -103,17 +105,16 @@ Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEM
 
 1. **Load your volume**: Use the Data module or File menu to load your medical imaging volume, or the [tutorial sample data](#tutorial-sample-data) above (`CTA-cardio.nrrd`).
 
-2. **Create seed points**: 
-   - Go to the Markups module
-   - Create two fiducial points by clicking "Add" and then placing points in your volume
-   - These will serve as seed points for the SeqSeg algorithm
-   - For **CTA-cardio** and **CT aorta**, follow [Placing seed points on CTA-cardio (CT aorta)](#placing-seed-points-on-cta-cardio-ct-aorta) above
+2. **Create and refine seed points** (typical workflow after loading):
+   - Open **SeqSeg Vessel Segmentation** and select your volume when you get to that step, then click **Auto-Create Seeds** so the module creates the two fiducial markups for you.
+   - **Toggle on Planes visible in 3D** for those seed markups (in the markups display / 3D view options) so you can see how the seeds line up with the volume in 3D.
+   - Zoom the 3D view (and use the slice viewers as needed) and **drag the seed points** to move them onto the vessel centerline where you want them.
+   - **Alternative (manual):** In the **Markups** module, create two fiducial points with **Add** and place them in the slice viewers; you can still enable **Planes visible in 3D** and drag points the same way.
+   - For **CTA-cardio** and **CT aorta**, follow [Placing seed points on CTA-cardio (CT aorta)](#placing-seed-points-on-cta-cardio-ct-aorta) for where to put each seed.
 
-3. **Use the SeqSeg Vessel Segmentation module**:
+3. **Finish settings and run SeqSeg** (in **SeqSeg Vessel Segmentation**, which you already opened for seeds):
    - Ensure **PyTorch** and **Slicer NNUNet** are installed from the Extension Manager ([Prerequisites](#prerequisites)).
-   - In the module finder, open **SeqSeg Vessel Segmentation** (Segmentation category; you can search for *vessel*, *segmentation*, or *SeqSeg*)
-   - Select your input volume
-   - Select your two seed point markups nodes
+   - Confirm **Input Volume** and both **Seed Point** markups match what you set up above (open the module from the module finder under Segmentation if you closed it—you can search for *vessel*, *segmentation*, or *SeqSeg*).
    - Set the radius estimate (approximate size of the structure you want to segment)
    - For **CTA-cardio** + **CT aorta**, set **Image Unit** to **mm**, **Scale** to **0.1**, and consider **nnUNet Type** **2d** as in [Tutorial module settings (CTA-cardio, CT aorta)](#tutorial-module-settings-cta-cardio-ct-aorta)
    - Configure **nnUNet** (expand **nnUNet Configuration** if needed—it opens expanded by default):

@@ -809,12 +809,15 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except Exception as e:
                 logging.warning(f"Could not sync {attr} to UI: {e}")
 
+        self._syncSeedPointSelectorsFromParameterNode()
+
     def onCreateSeedPointsButton(self) -> None:
         """Create or reset default seed points when user clicks the button."""
         # Clear existing seed points
         self._parameterNode.seedPoint1 = ""
         self._parameterNode.seedPoint2 = ""
-        
+        self._syncSeedPointSelectorsFromParameterNode()
+
         # Remove existing default seed points from scene if they exist
         existingSeed1 = slicer.mrmlScene.GetFirstNodeByName("SeqSeg Seed Point 1")
         if existingSeed1:
@@ -879,6 +882,26 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             seedPoint2Node.GetDisplayNode().SetTextScale(2.0)
             
             self._parameterNode.seedPoint2 = seedPoint2Node.GetID()
+
+        self._syncSeedPointSelectorsFromParameterNode()
+
+    def _syncSeedPointSelectorsFromParameterNode(self) -> None:
+        """Keep seed fiducial qMRMLNodeComboBox widgets aligned with parameter node IDs."""
+        if not self._parameterNode or not getattr(self, "ui", None):
+            return
+        for selector_name, param_attr in (
+            ("seedPoint1Selector", "seedPoint1"),
+            ("seedPoint2Selector", "seedPoint2"),
+        ):
+            if not hasattr(self.ui, selector_name):
+                continue
+            selector = getattr(self.ui, selector_name)
+            try:
+                node_id = (getattr(self._parameterNode, param_attr) or "").strip()
+                node = slicer.mrmlScene.GetNodeByID(node_id) if node_id else None
+                selector.setCurrentNode(node)
+            except Exception as e:
+                logging.warning("Could not sync %s to parameter node: %s", selector_name, e)
 
     def onDownloadWeightsButton(self) -> None:
         """Download Aorta weights (CT/MR) from Zenodo."""
