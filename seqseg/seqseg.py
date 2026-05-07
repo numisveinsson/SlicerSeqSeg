@@ -1473,14 +1473,20 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                     )
                 )
 
+        seqseg_requirement = Requirement(self.SEQSEG_PYTHON_PACKAGE_SPECIFIER)
+        installed_seqseg_version = None
         need_install = False
         try:
-            importlib.metadata.version("seqseg")
+            installed_seqseg_version = importlib.metadata.version(seqseg_requirement.name)
         except importlib.metadata.PackageNotFoundError:
             need_install = True
 
-        if upgrade:
-            slicer.util.pip_uninstall("seqseg")
+        if installed_seqseg_version is not None and not seqseg_requirement.specifier.contains(installed_seqseg_version):
+            logging.info(
+                _(
+                    "Installed SeqSeg version ({installed}) does not satisfy required specifier ({required}); reinstalling."
+                ).format(installed=installed_seqseg_version, required=self.SEQSEG_PYTHON_PACKAGE_SPECIFIER)
+            )
             need_install = True
 
         if need_install:
