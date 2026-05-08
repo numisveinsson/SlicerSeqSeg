@@ -1379,7 +1379,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         return seqsegParameterNode(super().getParameterNode())
 
     # Pin matches prior extension behavior (PyPI); installed with --no-deps then selective deps (TotalSegmentator-style).
-    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==1.0.6"
+    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==1.0.7"
 
     def pipInstallSelective(self, packageToInstall, installCommand, packagesToSkip):
         """Install a Python distribution without deps, strip skipped Requires-Dist lines, then pip-install remaining requires."""
@@ -1909,7 +1909,8 @@ Output Directory: {data_dir}"""
                 "-scale", str(scale_value),
                 "-max_n_steps", str(maxSteps),
                 "-max_n_branches", str(maxBranches),
-                "-max_n_steps_per_branch", str(maxStepsPerBranch)
+                "-max_n_steps_per_branch", str(maxStepsPerBranch),
+                # "-write_steps", "1",
             ]
             
             logging.info(f"Running SeqSeg command: {' '.join(seqseg_cmd)}")
