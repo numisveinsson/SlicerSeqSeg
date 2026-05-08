@@ -327,7 +327,7 @@
         <item>
          <widget class="QPushButton" name="downloadWeightsButton">
           <property name="text">
-           <string>Download Aorta Weights (CT/MR)</string>
+           <string>Download Aorta Weights</string>
           </property>
           <property name="toolTip">
            <string>One-click download: aorta weights (CT/MR) from Zenodo (236.3 MB). Choose a parent folder when asked; extracts to nnUNet_results and updates nnUNet Results Path when possible.</string>
@@ -337,7 +337,7 @@
         <item>
          <widget class="QPushButton" name="downloadCoronaryWeightsButton">
           <property name="text">
-           <string>Download Coronary CT Weights</string>
+           <string>Download Coronary Weights</string>
           </property>
           <property name="toolTip">
            <string>One-click download: coronary CTA lumen weights from Zenodo (~2.7 MB). Choose a parent folder when asked; extracts to nnUNet_results_coronary; Train Dataset can be set to Dataset010_SEQCOROASOCACT.</string>
@@ -385,6 +385,12 @@
         <property name="toolTip">
          <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path). Training voxel spacing: Dataset005 and Dataset006 were trained in cm units; Dataset010 was trained in mm. Match Image Unit (under Inputs) and Scale (below) accordingly.</string>
         </property>
+        <property name="sizeAdjustPolicy">
+         <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
+        </property>
+        <property name="minimumContentsLength">
+         <number>12</number>
+        </property>
         <property name="editable">
          <bool>false</bool>
         </property>
@@ -415,6 +421,12 @@
         </property>
         <property name="wordWrap">
          <bool>true</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
         <property name="styleSheet">
          <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
@@ -463,6 +475,12 @@
         </property>
         <property name="wordWrap">
          <bool>true</bool>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
         <property name="styleSheet">
          <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
@@ -699,6 +717,12 @@ Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After 
      </property>
      <property name="wordWrap">
       <bool>true</bool>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
