@@ -49,13 +49,43 @@
        </widget>
       </item>
       <item row="1" column="0">
+       <widget class="QLabel" name="unitLabel">
+        <property name="text">
+         <string>Image Unit:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="unitComboBox">
+        <property name="toolTip">
+         <string>Unit of the medical image</string>
+        </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>imageUnit</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>cm</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>mm</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QLabel" name="seedPoint1Label">
         <property name="text">
          <string>Seed Point 1:</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="qMRMLNodeComboBox" name="seedPoint1Selector">
         <property name="toolTip">
          <string>Select first seed point (markups fiducial)</string>
@@ -79,14 +109,14 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="seedPoint2Label">
         <property name="text">
          <string>Seed Point 2:</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <layout class="QHBoxLayout" name="seedPoint2Layout">
         <item>
          <widget class="qMRMLNodeComboBox" name="seedPoint2Selector">
@@ -130,14 +160,14 @@
         </item>
        </layout>
       </item>
-      <item row="3" column="0">
+      <item row="4" column="0">
        <widget class="QLabel" name="radiusLabel">
         <property name="text">
          <string>Radius Estimate (in image units):</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="4" column="1">
        <widget class="ctkSliderWidget" name="radiusSliderWidget">
         <property name="toolTip">
          <string>Estimated radius for segmentation in image units (default: mm). Typical values: 2-10 mm for vessels</string>
@@ -165,10 +195,10 @@
    <item>
     <widget class="ctkCollapsibleButton" name="parametersCollapsibleButton">
      <property name="text">
-      <string>Advanced Parameters</string>
+      <string>Segmentation Limits</string>
      </property>
      <property name="collapsed">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
      <layout class="QFormLayout" name="formLayout_parameters">
       <item row="0" column="0">
@@ -198,91 +228,13 @@
        </widget>
       </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="unitLabel">
-        <property name="text">
-         <string>Image Unit:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QComboBox" name="unitComboBox">
-        <property name="toolTip">
-         <string>Unit of the medical image</string>
-        </property>
-        <property name="currentIndex">
-         <number>0</number>
-        </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>imageUnit</string>
-        </property>
-        <item>
-         <property name="text">
-          <string>cm</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>mm</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="scaleLabel">
-        <property name="text">
-         <string>Scale:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QComboBox" name="scaleComboBox">
-        <property name="toolTip">
-         <string>Relates nnUNet training voxel units to your Image Unit. Use 10 if the model was trained in mm and your volume is in cm; use 0.1 if the model was trained in cm and your volume is in mm; use 1 when training units match the image (default).</string>
-        </property>
-        <property name="currentIndex">
-         <number>1</number>
-        </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>scale</string>
-        </property>
-        <item>
-         <property name="text">
-          <string>0.1</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>1</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>10</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="3" column="0" colspan="2">
-       <widget class="QLabel" name="scaleExplanationLabel">
-        <property name="text">
-         <string>Scale matches nnUNet training units to Image Unit: if the model was trained in mm and the image is in cm, choose 10; if the model was trained in cm and the image is in mm, choose 0.1; if units match, choose 1 (default).</string>
-        </property>
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-        <property name="styleSheet">
-         <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
        <widget class="QLabel" name="maxBranchesLabel">
         <property name="text">
          <string>Max Branches:</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="1">
+      <item row="1" column="1">
        <widget class="QSpinBox" name="maxBranchesSpinBox">
         <property name="toolTip">
          <string>Maximum number of branches for segmentation</string>
@@ -301,14 +253,14 @@
         </property>
        </widget>
       </item>
-      <item row="5" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="maxStepsPerBranchLabel">
         <property name="text">
          <string>Max Steps per Branch:</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="1">
+      <item row="2" column="1">
        <widget class="QSpinBox" name="maxStepsPerBranchSpinBox">
         <property name="toolTip">
          <string>Maximum number of steps per branch</string>
@@ -431,7 +383,7 @@
       <item row="3" column="1">
        <widget class="QComboBox" name="trainDatasetComboBox">
         <property name="toolTip">
-         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path). Training voxel spacing: Dataset005 and Dataset006 were trained in cm units; Dataset010 was trained in mm. Match Image Unit and Scale in Advanced Parameters accordingly.</string>
+         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path). Training voxel spacing: Dataset005 and Dataset006 were trained in cm units; Dataset010 was trained in mm. Match Image Unit (under Inputs) and Scale (below) accordingly.</string>
         </property>
         <property name="editable">
          <bool>false</bool>
@@ -459,7 +411,7 @@
       <item row="4" column="0" colspan="2">
        <widget class="QLabel" name="trainDatasetUnitsHintLabel">
         <property name="text">
-         <string>Dataset005_SEQAORTANDFEMOMR and Dataset006_SEQAORTANDFEMOCT were trained on cm-scale data; Dataset010_SEQCOROASOCACT was trained on mm-scale data. Set Image Unit and Scale under Advanced Parameters to match your volume and the model.</string>
+         <string>Dataset005_SEQAORTANDFEMOMR and Dataset006_SEQAORTANDFEMOCT were trained on cm-scale data; Dataset010_SEQCOROASOCACT was trained on mm-scale data. Set Image Unit under Inputs and Scale below to match your volume and the model.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -470,13 +422,61 @@
        </widget>
       </item>
       <item row="5" column="0">
+       <widget class="QLabel" name="scaleLabel">
+        <property name="text">
+         <string>Scale:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QComboBox" name="scaleComboBox">
+        <property name="toolTip">
+         <string>Relates nnUNet training voxel units to your Image Unit. Use 10 if the model was trained in mm and your volume is in cm; use 0.1 if the model was trained in cm and your volume is in mm; use 1 when training units match the image (default).</string>
+        </property>
+        <property name="currentIndex">
+         <number>1</number>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>scale</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>0.1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>10</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="6" column="0" colspan="2">
+       <widget class="QLabel" name="scaleExplanationLabel">
+        <property name="text">
+         <string>Scale matches nnUNet training units to Image Unit: if the model was trained in mm and the image is in cm, choose 10; if the model was trained in cm and the image is in mm, choose 0.1; if units match, choose 1 (default).</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+        <property name="styleSheet">
+         <string>QLabel { color: palette(shadow); font-size: 11px; }</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
        <widget class="QLabel" name="foldLabel">
         <property name="text">
          <string>Fold:</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="1">
+      <item row="7" column="1">
        <widget class="QComboBox" name="foldComboBox">
         <property name="toolTip">
          <string>Which fold to use for nnUNet model</string>

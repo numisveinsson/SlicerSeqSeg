@@ -92,11 +92,11 @@ Whether you used **Auto-Create Seeds** or the **Markups** module, you need two f
 
 ### Tutorial module settings (CTA-cardio, CT aorta)
 
-Before **Run SeqSeg**, align **Advanced Parameters** and **nnUNet Configuration** with the tutorial setup below. Example from the module UI:
+Before **Run SeqSeg**, align **Inputs**, **Segmentation Limits**, and **nnUNet Configuration** with the tutorial setup below. Example from the module UI:
 
-![CTA-cardio tutorial: recommended Advanced Parameters and nnUNet settings](seqseg/Resources/screenshot/settings_screenshot.png)
+![CTA-cardio tutorial: recommended Inputs, Segmentation Limits, and nnUNet settings](seqseg/Resources/screenshot/settings_screenshot.png)
 
-- **Image Unit** = **mm** and **Scale** = **0.1**: the bundled deep-learning weights for this walkthrough were trained with **centimeter**–style image spacing; typical Slicer CT volumes (including CTA-cardio) use **millimeter** voxel spacing. Choosing **mm** for the image and **0.1** for **Scale** maps the volume to the physical scale the model expects. Wrong combinations here are a common cause of poor or misaligned results (the in-module Scale note under **Advanced Parameters** describes the same rule in general form).
+- **Image Unit** = **mm** and **Scale** = **0.1**: the bundled deep-learning weights for this walkthrough were trained with **centimeter**–style image spacing; typical Slicer CT volumes (including CTA-cardio) use **millimeter** voxel spacing. Choosing **mm** for the image and **0.1** for **Scale** maps the volume to the physical scale the model expects. Wrong combinations here are a common cause of poor or misaligned results (the in-module Scale explanation under **nnUNet Configuration** describes the same rule in general form).
 - **nnUNet Type** = **2d**: use the **2D** model for **faster inference** while following the tutorial (especially on a laptop or for a first run). **3d_fullres** is available if you prefer the full-resolution 3D configuration and can accept longer run times.
 
 Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEMOCT`, **Fold** `all`, radius **10** (mm, same as volume unit), **Nr. of Steps** **2**) are reasonable starting points for this dataset; adjust if your machine or case needs it.
@@ -121,7 +121,7 @@ Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEM
      - **Getting pretrained weights (easy path):** you **do not** train models or use the terminal. Press **Download Aorta Weights (CT/MR)** or **Download Coronary CT Weights**; Slicer asks for a parent directory, then the extension downloads from [Zenodo](https://zenodo.org/records/15020477) (aorta, ~236 MB) or [Zenodo](https://zenodo.org/records/19547894) (coronary CT, ~2.7 MB), unpacks, and typically sets **nnUNet Results Path** for you (`nnUNet_results` or `nnUNet_results_coronary` under the folder you chose; default parent is often `~/SeqSeg_Weights`). After the aorta download, answer the MR vs CT prompt so **Train Dataset** matches your images (the **Train Dataset** dropdown is updated accordingly); the coronary button selects **Dataset010_SEQCOROASOCACT** when used.
      - **Advanced:** if you already have nnUNet results on disk, set **nnUNet Results Path** with the folder control instead of the buttons.
      - Choose nnUNet type (3d_fullres or 2d)
-     - **Train Dataset** (dropdown): choose the dataset id that matches your weights—`Dataset005_SEQAORTANDFEMOMR` (aorta MR), `Dataset006_SEQAORTANDFEMOCT` (aorta CT), or `Dataset010_SEQCOROASOCACT` (coronary CT lumen). The aorta models (005 and 006) were trained with **cm-scale** voxel spacing; the coronary model (010) was trained with **mm-scale** spacing—align **Image Unit** and **Scale** (Advanced Parameters) with your volume and that training convention.
+     - **Train Dataset** (dropdown): choose the dataset id that matches your weights—`Dataset005_SEQAORTANDFEMOMR` (aorta MR), `Dataset006_SEQAORTANDFEMOCT` (aorta CT), or `Dataset010_SEQCOROASOCACT` (coronary CT lumen). The aorta models (005 and 006) were trained with **cm-scale** voxel spacing; the coronary model (010) was trained with **mm-scale** spacing—align **Image Unit** (under **Inputs**) and **Scale** (**nnUNet Configuration**) with your volume and that training convention.
      - Choose fold (usually "all" or specific fold number)
    - Create or select an output segmentation node
    - Click "Run SeqSeg"
@@ -130,15 +130,15 @@ Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEM
 
 ### Inputs
 - **Input Volume**: The medical imaging volume to segment (NIfTI format recommended)
+- **Image Unit**: Physical unit of the volume spacing as interpreted by the module (**cm** or **mm**); must be consistent with **Scale** in **nnUNet Configuration** for the selected **Train Dataset**
 - **Seed Point 1**: First markups fiducial node (must contain at least one point)
 - **Seed Point 2**: Second markups fiducial node (must contain at least one point)
 - **Radius Estimate**: Estimated radius of the structure to segment in millimeters (range: 0.1 - 100 mm)
 
-### Advanced Parameters
+### Segmentation Limits
 - **Nr. of Steps**: Maximum number of tracking steps (1 - 10000, default: 10)
 - **Max Branches**: Maximum number of vessel branches to follow (1 - 100, default: 2)
 - **Max Steps per Branch**: Maximum steps per vessel branch (1 - 1000, default: 5)
-- **Image Unit**: Unit of the medical image (mm or cm, default: mm)
 
 ### nnUNet Configuration
 This section opens **expanded** by default. **Pretrained weights are meant to be installed with the two download buttons** (not by hunting files on the web unless you prefer to): click, pick a save location when prompted, wait for unpack; the module wires **nnUNet Results Path** when it can.

@@ -19,16 +19,8 @@ from slicer.parameterNodeWrapper import (
     Choice,
 )
 
+from slicer import vtkMRMLMarkupsFiducialNode
 from slicer import vtkMRMLScalarVolumeNode
-
-# Import additional MRML node types for parameter node
-try:
-    from slicer import vtkMRMLMarkupsFiducialNode
-    from slicer import vtkMRMLSegmentationNode
-except ImportError:
-    # Fallback for older Slicer versions
-    vtkMRMLMarkupsFiducialNode = None
-    vtkMRMLSegmentationNode = None
 
 
 def _normalize_loaded_volume_node(loaded):
@@ -169,8 +161,8 @@ class seqsegParameterNode:
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
-    seedPoint1: str = ""  # Markups fiducial node ID
-    seedPoint2: str = ""  # Markups fiducial node ID
+    seedPoint1: Optional[vtkMRMLMarkupsFiducialNode] = None
+    seedPoint2: Optional[vtkMRMLMarkupsFiducialNode] = None
     radiusEstimate: Annotated[float, WithinRange(0.1, 30.0)] = 1.0  # Radius in mm
     maxSteps: Annotated[int, WithinRange(1, 10000)] = 1  # Max segmentation steps
     maxBranches: Annotated[int, WithinRange(1, 50)] = 1  # Max number of branches
@@ -299,6 +291,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info("Connected train dataset combo box signal")
         else:
             logging.warning("Could not connect train dataset combo box signal")
+
+        if hasattr(self.ui, "scaleComboBox") and hasattr(self.ui.scaleComboBox, "currentTextChanged"):
+            self.ui.scaleComboBox.currentTextChanged.connect(self.onScaleChanged)
+            logging.info("Connected scale combo box signal")
+        else:
+            logging.warning("Could not connect scale combo box signal")
+
+        if hasattr(self.ui, "foldComboBox") and hasattr(self.ui.foldComboBox, "currentTextChanged"):
+            self.ui.foldComboBox.currentTextChanged.connect(self.onFoldChanged)
+            logging.info("Connected fold combo box signal")
+        else:
+            logging.warning("Could not connect fold combo box signal")
 
         # QSpinBox values are not always pushed to the parameter node by connectGui; sync explicitly.
         for spin_name, handler, label in (
@@ -455,8 +459,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             missing_requirements.append("Input Volume")
             
         # Check if we have seed points or can create them
-        seed1Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint1) if self._parameterNode.seedPoint1 else None
-        seed2Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint2) if self._parameterNode.seedPoint2 else None
+        seed1Node = self._parameterNode.seedPoint1
+        seed2Node = self._parameterNode.seedPoint2
         
         if not seed1Node or not seed2Node:
             if not self._parameterNode.inputVolume:
@@ -506,8 +510,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     else:
                         raise ValueError("No volume found in scene. Please load a volume first.")
             
-            seedPoint1Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint1)
-            seedPoint2Node = slicer.mrmlScene.GetNodeByID(self._parameterNode.seedPoint2) 
+            seedPoint1Node = self._parameterNode.seedPoint1
+            seedPoint2Node = self._parameterNode.seedPoint2 
             radiusEstimate = self._parameterNode.radiusEstimate
             maxSteps = self._parameterNode.maxSteps
             maxBranches = self._parameterNode.maxBranches
@@ -516,7 +520,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             nnunetResultsPath = self._parameterNode.nnunetResultsPath
             nnunetType = self._parameterNode.nnunetType
             trainDataset = self._parameterNode.trainDataset
-            fold = self._parameterNode.fold
             
             # Debug: Log the nnUNet parameters with extra details
             logging.info(f"nnUNet Results Path from parameter node: '{nnunetResultsPath}'")
@@ -584,7 +587,31 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     self._parameterNode.maxStepsPerBranch = maxStepsPerBranch
                 except Exception as e:
                     logging.warning(f"Could not read max steps per branch from UI: {e}")
-            
+
+            # Scale / fold: read from UI before run (connectGui may not update the parameter node).
+            if hasattr(self.ui, "scaleComboBox"):
+                try:
+                    ui_scale = self.ui.scaleComboBox.currentText
+                    if ui_scale in ("0.1", "1", "10"):
+                        self._parameterNode.scale = ui_scale
+                    elif ui_scale:
+                        logging.warning(f"Scale '{ui_scale}' not in allowed list; keeping parameter node value")
+                except Exception as e:
+                    logging.warning(f"Could not read Scale from UI: {e}")
+
+            if hasattr(self.ui, "foldComboBox"):
+                try:
+                    ui_fold = self.ui.foldComboBox.currentText
+                    _allowed_folds = frozenset({"all", "0", "1", "2", "3", "4"})
+                    if ui_fold in _allowed_folds:
+                        self._parameterNode.fold = ui_fold
+                    elif ui_fold:
+                        logging.warning(f"Fold '{ui_fold}' not in allowed list; keeping parameter node value")
+                except Exception as e:
+                    logging.warning(f"Could not read Fold from UI: {e}")
+
+            fold = self._parameterNode.fold
+
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
             
@@ -700,6 +727,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._parameterNode.trainDataset = train_dataset
             logging.info(f"Train Dataset updated to: {train_dataset}")
 
+    def onScaleChanged(self, scale: str) -> None:
+        """Called when Scale combo box changes - sync with parameter node."""
+        if self._parameterNode and scale in ("0.1", "1", "10"):
+            self._parameterNode.scale = scale
+            logging.info(f"Scale updated to: {scale}")
+
+    def onFoldChanged(self, fold: str) -> None:
+        """Called when Fold combo box changes - sync with parameter node."""
+        if self._parameterNode and fold in ("all", "0", "1", "2", "3", "4"):
+            self._parameterNode.fold = fold
+            logging.info(f"Fold updated to: {fold}")
+
     def onMaxStepsChanged(self, value: int) -> None:
         if self._parameterNode is not None:
             self._parameterNode.maxSteps = int(value)
@@ -792,6 +831,36 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except Exception as e:
                 logging.warning(f"Could not sync train dataset to UI: {e}")
 
+        # Sync scale combo box (backup for parameter binding)
+        if hasattr(self.ui, "scaleComboBox") and self._parameterNode.scale:
+            try:
+                current_scale = self._parameterNode.scale
+                combo_box = self.ui.scaleComboBox
+                if combo_box.currentText != current_scale:
+                    index = combo_box.findText(current_scale)
+                    if index >= 0:
+                        combo_box.setCurrentIndex(index)
+                        logging.info(f"Synced scale to UI: {current_scale}")
+                    else:
+                        logging.warning(f"Scale '{current_scale}' not found in combo box options")
+            except Exception as e:
+                logging.warning(f"Could not sync scale to UI: {e}")
+
+        # Sync fold combo box (backup for parameter binding)
+        if hasattr(self.ui, "foldComboBox") and self._parameterNode.fold:
+            try:
+                current_fold = self._parameterNode.fold
+                combo_box = self.ui.foldComboBox
+                if combo_box.currentText != current_fold:
+                    index = combo_box.findText(current_fold)
+                    if index >= 0:
+                        combo_box.setCurrentIndex(index)
+                        logging.info(f"Synced fold to UI: {current_fold}")
+                    else:
+                        logging.warning(f"Fold '{current_fold}' not found in combo box options")
+            except Exception as e:
+                logging.warning(f"Could not sync fold to UI: {e}")
+
         # Sync integer spin boxes when parameter node was restored or updated in code
         for attr, spin_name in (
             ("maxSteps", "maxStepsSpinBox"),
@@ -814,8 +883,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onCreateSeedPointsButton(self) -> None:
         """Create or reset default seed points when user clicks the button."""
         # Clear existing seed points
-        self._parameterNode.seedPoint1 = ""
-        self._parameterNode.seedPoint2 = ""
+        self._parameterNode.seedPoint1 = None
+        self._parameterNode.seedPoint2 = None
         self._syncSeedPointSelectorsFromParameterNode()
 
         # Remove existing default seed points from scene if they exist
@@ -856,7 +925,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             seedPoint1Node.GetDisplayNode().SetGlyphScale(3.0)
             seedPoint1Node.GetDisplayNode().SetTextScale(2.0)
             
-            self._parameterNode.seedPoint1 = seedPoint1Node.GetID()
+            self._parameterNode.seedPoint1 = seedPoint1Node
 
         # Create second seed point if it doesn't exist
         if not self._parameterNode.seedPoint2:
@@ -881,12 +950,12 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             seedPoint2Node.GetDisplayNode().SetGlyphScale(3.0)
             seedPoint2Node.GetDisplayNode().SetTextScale(2.0)
             
-            self._parameterNode.seedPoint2 = seedPoint2Node.GetID()
+            self._parameterNode.seedPoint2 = seedPoint2Node
 
         self._syncSeedPointSelectorsFromParameterNode()
 
     def _syncSeedPointSelectorsFromParameterNode(self) -> None:
-        """Keep seed fiducial qMRMLNodeComboBox widgets aligned with parameter node IDs."""
+        """Keep seed fiducial qMRMLNodeComboBox widgets aligned with parameter node references."""
         if not self._parameterNode or not getattr(self, "ui", None):
             return
         for selector_name, param_attr in (
@@ -897,8 +966,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 continue
             selector = getattr(self.ui, selector_name)
             try:
-                node_id = (getattr(self._parameterNode, param_attr) or "").strip()
-                node = slicer.mrmlScene.GetNodeByID(node_id) if node_id else None
+                node = getattr(self._parameterNode, param_attr)
                 selector.setCurrentNode(node)
             except Exception as e:
                 logging.warning("Could not sync %s to parameter node: %s", selector_name, e)
