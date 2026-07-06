@@ -29,20 +29,19 @@ Install these from **View → Extension Manager** (search by name and install):
 - **[PyTorch](https://slicer.readthedocs.io/en/latest/user_guide/extensions_manager.html)** (catalog name usually **PyTorch**): supplies **`PyTorchUtils`**, used to install a compatible **`torch`** / **`torchvision`** build into Slicer’s Python.
 - **NNUNet** (catalog name usually **NNUNet**; Python module **`SlicerNNUNetLib`**): supplies **`nnunetv2`** installation and version checks aligned with other nnUNet-based Slicer extensions.
 
-When you install **SeqSeg Vessel Segmentation** from the Extension Manager **after this repository declares dependencies**, **PyTorch** and **NNUNet** should be pulled in automatically (same pattern as **Total Segmentator**). If you added this extension manually (developer setup from source), install **PyTorch** and **NNUNet** yourself from Extension Manager.
+Install **PyTorch** and **NNUNet** manually from the Extension Manager before running SeqSeg. If Slicer prompts for a restart after installing either extension, restart Slicer before opening **SeqSeg Vessel Segmentation**.
 
 Without both extensions loaded, **Run SeqSeg** stops with an error until they are installed (then restart Slicer if prompted).
 
-Extension dependencies are declared in **`CMakeLists.txt`** (`EXTENSION_DEPENDS`) so the Extension Manager can install **PyTorch** and **NNUNet** alongside this extension. The scripted module itself does **not** list those as hard Qt module dependencies (same idea as Total Segmentator): otherwise Slicer would refuse to open SeqSeg until PyTorch loads, and you would not get the in-module install prompts.
+Extension dependencies are declared in **`CMakeLists.txt`** (`EXTENSION_DEPENDS`) to record that this extension requires **PyTorch** and **NNUNet**. The scripted module itself does **not** list those as hard Qt module dependencies (same idea as Total Segmentator): otherwise Slicer would refuse to open SeqSeg until PyTorch loads, and you would not get the in-module dependency checks.
 
-### First-time Python setup (automatic)
+### First-time Python setup
 
-The **SeqSeg Vessel Segmentation** module does **not** ship PyTorch or nnUNet wheels inside its own installer. When you click **Run SeqSeg** for the first time (or until dependencies are satisfied), the module:
+The **SeqSeg Vessel Segmentation** module does **not** ship PyTorch or nnUNet wheels inside its own installer. Before running SeqSeg:
 
-1. May ask you to confirm installation of extra Python packages (network required).
-2. Installs **PyTorch** via the PyTorch extension’s installer (**`torch` 2.2.2**).
-3. Installs **`nnunetv2` 2.5.1** via the **Slicer NNUNet** extension’s installer (same version on all platforms).
-4. Installs the **`seqseg`** PyPI package (**`seqseg==1.0.4`**) using **`slicer.util.pip_install`**, first with **`--no-deps`**, then installs declared dependencies selectively—**skipping** packages that must stay under Slicer’s control (**SimpleITK**, **torch**, **torchvision**, **nnunetv2**, **requests**, **rt_utils**), same pattern as extensions such as **Total Segmentator**.
+1. Install **PyTorch** from Slicer Extensions and use it to provide **`torch` 2.2.2** / **`torchvision` 0.17.2** in Slicer’s Python.
+2. Install **NNUNet** from Slicer Extensions and use it to provide **`nnunetv2` 2.5.1** in Slicer’s Python.
+3. On first **Run SeqSeg**, the module may ask you to confirm installation of extra Python packages (network required). It installs the **`seqseg`** PyPI package (**`seqseg==1.0.8`**) using **`slicer.util.pip_install`**, first with **`--no-deps`**, then installs declared dependencies selectively—**skipping** packages that must stay under Slicer’s control (**SimpleITK**, **torch**, **torchvision**, **nnunetv2**, **requests**, **rt_utils**), same pattern as extensions such as **Total Segmentator**.
 
 You may need to **restart Slicer** once after PyTorch or other packages are installed; follow any prompt the module shows.
 
@@ -55,7 +54,7 @@ Use the **Download Aorta Weights (CT/MR)** and **Download Coronary CT Weights** 
 Use **Slicer’s** Python interpreter, not your system `python`. Example (adjust path to your Slicer install):
 
 ```bash
-/path/to/Slicer-X.Y.Z/bin/PythonSlicer -m pip install seqseg==1.0.4
+/path/to/Slicer-X.Y.Z/bin/PythonSlicer -m pip install seqseg==1.0.8
 ```
 
 You still need the **PyTorch** and **Slicer NNUNet** extensions and their installers to provide **`torch`** and **`nnunetv2`** consistently.
@@ -208,7 +207,7 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
 - **PyTorch / Slicer NNUNet missing**: Install both from **Extension Manager**, restart Slicer if prompted, then open **SeqSeg Vessel Segmentation** again.
 - **Dependency installation cancelled or failed**: Check the **Python Interactor** log for `pip` output. Confirm network access. Use the **PyTorch Util** module to fix **`torch`** versions if the error mentions an incompatible PyTorch build; use the **nnUNet** module from **Slicer NNUNet** if **`nnunetv2`** is missing or too old.
 - **Restart requested after install**: Complete any dependency dialog; restart Slicer when the module asks so newly installed packages load cleanly.
-- **"SeqSeg dependency installation failed"** or **`seqseg`** still missing**: Install **`seqseg==1.0.4`** with **`PythonSlicer -m pip`** ([Manual / advanced installation](#manual--advanced-installation)) after **`torch`** and **`nnunetv2`** are working via the extensions.
+- **"SeqSeg dependency installation failed"** or **`seqseg`** still missing**: Install **`seqseg==1.0.8`** with **`PythonSlicer -m pip`** ([Manual / advanced installation](#manual--advanced-installation)) after **`torch`** and **`nnunetv2`** are working via the extensions.
 - **"Seed point is not defined"**: Make sure both markups nodes contain at least one fiducial point.
 - **"SeqSeg execution failed"**: If you have not downloaded weights yet, use **Download Aorta Weights (CT/MR)** or **Download Coronary CT Weights** in the module first; otherwise confirm **nnUNet Results Path** points at the folder that contains the unpacked `nnUNet_results` tree and that the **Train Dataset** dropdown matches the model you installed.
 - **"No output segmentation file found"**: SeqSeg may have failed silently—check the Slicer console for detailed error messages.
@@ -217,11 +216,11 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
 
 ## Prerequisites for SeqSeg
 
-**Using this extension:** install **PyTorch** and **Slicer NNUNet** from the Extension Manager ([Prerequisites](#prerequisites)); on first **Run SeqSeg**, accept the prompts so **`torch`**, **`nnunetv2`**, and **`seqseg`** install into Slicer’s Python. Then install **pretrained** nnUNet weights with the **download buttons** in the module—no manual command-line nnUNet training for typical use.
+**Using this extension:** install **PyTorch** and **Slicer NNUNet** from the Extension Manager ([Prerequisites](#prerequisites)) so **`torch` 2.2.2** and **`nnunetv2` 2.5.1** are available in Slicer’s Python. Then install **pretrained** nnUNet weights with the **download buttons** in the module—no manual command-line nnUNet training for typical use.
 
 The underlying SeqSeg / nnUNet stack ultimately needs:
 1. **PyTorch** and **`nnunetv2`** managed through those Slicer extensions (not ad hoc system-wide pip alone).
-2. The **`seqseg`** Python package (**`seqseg==1.0.4`**) plus its remaining dependencies, installed via **`slicer.util.pip_install`** with selective skipping of Slicer-managed packages (see [First-time Python setup](#first-time-python-setup-automatic)).
+2. The **`seqseg`** Python package (**`seqseg==1.0.8`**) plus its remaining dependencies, installed via **`slicer.util.pip_install`** with selective skipping of Slicer-managed packages (see [First-time Python setup](#first-time-python-setup)).
 3. **Trained model files** on disk—the extension supplies these via **Download Aorta…** / **Download Coronary CT…** unless you point **nnUNet Results Path** at your own trained outputs (e.g., `Dataset005_SEQAORTANDFEMOMR`, `Dataset006_SEQAORTANDFEMOCT`, or `Dataset010_SEQCOROASOCACT` for coronary CT).
 4. For **custom** nnUNet layouts, the environment variables your setup expects; using the module’s **download buttons** covers the common case without manual variable tuning.
 5. Compatible image formats (NIfTI recommended).

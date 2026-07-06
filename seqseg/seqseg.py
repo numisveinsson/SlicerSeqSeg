@@ -54,7 +54,7 @@ class seqseg(ScriptedLoadableModule):
         self.parent.helpText = _("""
 SeqSeg Vessel Segmentation is a seed-based vascular segmentation module for 3D Slicer. It uses the SeqSeg Python package,
 requires two seed points and a volume as input, and produces a segmentation, surface mesh, and centerline.
-The first run installs Python dependencies via the <b>PyTorch</b> and <b>Slicer NNUNet</b> extensions (from Extension Manager); pretrained nnUNet weights use the <b>Download Aorta Weights (CT/MR)</b> and <b>Download Coronary CT Weights</b> buttons in <b>nnUNet Configuration</b>.
+Install <b>PyTorch</b> and <b>Slicer NNUNet</b> manually from Slicer Extensions before running; pretrained nnUNet weights use the <b>Download Aorta Weights (CT/MR)</b> and <b>Download Coronary CT Weights</b> buttons in <b>nnUNet Configuration</b>.
 See more information in <a href="https://github.com/numisveinsson/SeqSeg">SeqSeg package documentation</a>.
 """)
         self.parent.acknowledgementText = _("""

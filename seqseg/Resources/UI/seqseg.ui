@@ -12,6 +12,16 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QLabel" name="dependencyDescriptorLabel">
+     <property name="text">
+      <string>Requires PyTorch and NNUNet via Slicer Extensions before running. Install torch 2.2.2 and nnunetv2 2.5.1.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
      <property name="text">
       <string>Inputs</string>
