@@ -1448,8 +1448,8 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
 
         requiredTorchVersion = "2.2.2"
         requiredTorchVisionVersion = "0.17.2"
-        requiredNnunetV2Version = "2.5.1"
-        required_nnunet_v = pkg_version.parse(requiredNnunetV2Version)
+        minimumNnunetV2Version = "2.5.1"
+        minimum_nnunet_v = pkg_version.parse(minimumNnunetV2Version)
 
         def _torch_base_matches(version_str):
             return pkg_version.parse(version_str).base_version == requiredTorchVersion
@@ -1503,7 +1503,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
 
         if not nnunetlogic.isPackageInstalled(Requirement("nnunetv2")):
             confirmPackagesToInstall.append("nnunetv2")
-        elif pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion())) != required_nnunet_v:
+        elif pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion())) < minimum_nnunet_v:
             confirmPackagesToInstall.append("nnunetv2")
 
         if confirmPackagesToInstall:
@@ -1543,24 +1543,24 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
 
         if "nnunetv2" in confirmPackagesToInstall:
             logging.info(_("Installing nnunetv2 (may take several minutes)..."))
-            nnunet_ok = nnunetlogic.setupPythonRequirements(f"nnunetv2=={requiredNnunetV2Version}")
+            nnunet_ok = nnunetlogic.setupPythonRequirements(f"nnunetv2>={minimumNnunetV2Version}")
             if not nnunet_ok:
                 raise InstallError(_("nnUNet v2 installation failed. Install the Slicer NNUNet extension from the Extensions Manager."))
             installed_nnunet_version = pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion()))
-            if installed_nnunet_version != required_nnunet_v:
+            if installed_nnunet_version < minimum_nnunet_v:
                 raise InstallError(
-                    _("nnUNet v2 version {current} was expected after install ({required}). Use the nnUNet module to install the required version.").format(
+                    _("nnUNet v2 version {current} was installed but at least {required} is required. Use the nnUNet module to install a compatible version.").format(
                         current=installed_nnunet_version,
-                        required=requiredNnunetV2Version,
+                        required=minimumNnunetV2Version,
                     )
                 )
         else:
             installed_nnunet_version = pkg_version.parse(str(nnunetlogic.getInstalledNNUnetVersion()))
-            if installed_nnunet_version != required_nnunet_v:
+            if installed_nnunet_version < minimum_nnunet_v:
                 raise InstallError(
-                    _("nnUNet v2 version {current} is required to be {required}. Use the nnUNet module to install the required version.").format(
+                    _("nnUNet v2 version {current} is installed but at least {required} is required. Use the nnUNet module to install a compatible version.").format(
                         current=installed_nnunet_version,
-                        required=requiredNnunetV2Version,
+                        required=minimumNnunetV2Version,
                     )
                 )
 
