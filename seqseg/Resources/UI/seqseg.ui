@@ -96,28 +96,51 @@
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="qMRMLNodeComboBox" name="seedPoint1Selector">
-        <property name="toolTip">
-         <string>Select first seed point (markups fiducial)</string>
-        </property>
-        <property name="nodeTypes">
-         <stringlist notr="true">
-          <string>vtkMRMLMarkupsFiducialNode</string>
-         </stringlist>
-        </property>
-        <property name="showChildNodeTypes">
-         <bool>false</bool>
-        </property>
-        <property name="addEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="removeEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>seedPoint1</string>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="seedPoint1Layout">
+        <item>
+         <widget class="qMRMLNodeComboBox" name="seedPoint1Selector">
+          <property name="toolTip">
+           <string>Select first seed point (markups fiducial)</string>
+          </property>
+          <property name="nodeTypes">
+           <stringlist notr="true">
+            <string>vtkMRMLMarkupsFiducialNode</string>
+           </stringlist>
+          </property>
+          <property name="showChildNodeTypes">
+           <bool>false</bool>
+          </property>
+          <property name="addEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="removeEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="SlicerParameterName" stdset="0">
+           <string>seedPoint1</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="placeSeedPoint1Button">
+          <property name="text">
+           <string>Place</string>
+          </property>
+          <property name="toolTip">
+           <string>Click this button, then click in a slice or 3D view to place the first seed point</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="seedPoint2Label">
@@ -153,6 +176,25 @@
          </widget>
         </item>
         <item>
+         <widget class="QPushButton" name="placeSeedPoint2Button">
+          <property name="text">
+           <string>Place</string>
+          </property>
+          <property name="toolTip">
+           <string>Click this button, then click in a slice or 3D view to place the second seed point</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QPushButton" name="createSeedPointsButton">
           <property name="text">
            <string>Auto-Create Seeds</string>
@@ -160,11 +202,11 @@
           <property name="toolTip">
            <string>Automatically create seed points positioned within the selected volume bounds</string>
           </property>
-          <property name="minimumSize">
-           <size>
-            <width>120</width>
-            <height>0</height>
-           </size>
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
          </widget>
         </item>

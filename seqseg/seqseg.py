@@ -236,6 +236,16 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Buttons
         self.ui.applyButton.connect("clicked(bool)", self.onApplyButton)
         self.ui.createSeedPointsButton.connect("clicked(bool)", self.onCreateSeedPointsButton)
+        if hasattr(self.ui, "placeSeedPoint1Button"):
+            self.ui.placeSeedPoint1Button.connect("clicked(bool)", self.onPlaceSeedPoint1Button)
+        if hasattr(self.ui, "placeSeedPoint2Button"):
+            self.ui.placeSeedPoint2Button.connect("clicked(bool)", self.onPlaceSeedPoint2Button)
+
+        # Reset the "Place Point" toggle buttons when placement mode ends.
+        interactionNode = slicer.app.applicationLogic().GetInteractionNode()
+        if interactionNode:
+            self.addObserver(interactionNode, interactionNode.InteractionModeChangedEvent,
+                             self._onInteractionModeChanged)
         self.ui.downloadWeightsButton.connect("clicked(bool)", self.onDownloadWeightsButton)
         if hasattr(self.ui, "downloadCoronaryWeightsButton"):
             self.ui.downloadCoronaryWeightsButton.connect("clicked(bool)", self.onDownloadCoronaryWeightsButton)
@@ -406,9 +416,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 default_output_dir = default_output_dir + os.sep
             self._parameterNode.outputDirectory = default_output_dir
             logging.info(f"Using default output directory: {default_output_dir}")
-        
-        # Create default seed points if they don't exist
-        self._createDefaultSeedPoints()
 
     def _populateTrainDatasetComboFromKnown(self) -> None:
         """Rebuild Train Dataset combo items from KNOWN_TRAIN_DATASETS.
@@ -898,6 +905,67 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         
         # Create new default seed points
         self._createDefaultSeedPoints()
+
+    def onPlaceSeedPoint1Button(self, checked: bool = True) -> None:
+        """Enter placement mode so the next click in a view sets seed point 1."""
+        self._startPlacingSeedPoint(1)
+
+    def onPlaceSeedPoint2Button(self, checked: bool = True) -> None:
+        """Enter placement mode so the next click in a view sets seed point 2."""
+        self._startPlacingSeedPoint(2)
+
+    def _getOrCreateSeedNode(self, index: int):
+        """Return the markups node for the given seed index, creating an empty one if needed."""
+        param_attr = f"seedPoint{index}"
+        node = getattr(self._parameterNode, param_attr, None)
+        if not node:
+            name = f"SeqSeg Seed Point {index}"
+            node = slicer.mrmlScene.GetFirstNodeByName(name)
+            if not node:
+                node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode", name)
+            node.SetMaximumNumberOfControlPoints(1)
+            node.CreateDefaultDisplayNodes()
+            if index == 1:
+                node.GetDisplayNode().SetSelectedColor(1, 0, 0)  # Red
+            else:
+                node.GetDisplayNode().SetSelectedColor(0, 1, 0)  # Green
+            node.GetDisplayNode().SetGlyphScale(3.0)
+            node.GetDisplayNode().SetTextScale(2.0)
+            setattr(self._parameterNode, param_attr, node)
+            self._syncSeedPointSelectorsFromParameterNode()
+        return node
+
+    def _onInteractionModeChanged(self, caller=None, event=None) -> None:
+        """Untoggle the place buttons when Slicer leaves placement mode."""
+        interactionNode = slicer.app.applicationLogic().GetInteractionNode()
+        if not interactionNode:
+            return
+        if interactionNode.GetCurrentInteractionMode() != interactionNode.Place:
+            for button_name in ("placeSeedPoint1Button", "placeSeedPoint2Button"):
+                if hasattr(self.ui, button_name):
+                    getattr(self.ui, button_name).setChecked(False)
+
+    def _startPlacingSeedPoint(self, index: int) -> None:
+        """Put Slicer into single-point place mode targeting the requested seed node."""
+        node = self._getOrCreateSeedNode(index)
+
+        # Only one seed point per node: clear any previous position so the click replaces it.
+        node.RemoveAllControlPoints()
+
+        # Make the other place button appear inactive.
+        otherButton = f"placeSeedPoint{2 if index == 1 else 1}Button"
+        if hasattr(self.ui, otherButton):
+            getattr(self.ui, otherButton).setChecked(False)
+
+        selectionNode = slicer.mrmlScene.GetNodeByID("vtkMRMLSelectionNodeSingleton")
+        selectionNode.SetReferenceActivePlaceNodeClassName("vtkMRMLMarkupsFiducialNode")
+        selectionNode.SetActivePlaceNodeID(node.GetID())
+
+        interactionNode = slicer.app.applicationLogic().GetInteractionNode()
+        interactionNode.SetPlaceModePersistence(0)  # place a single control point
+        interactionNode.SetCurrentInteractionMode(interactionNode.Place)
+
+        self._updateStatusMessage(f"Click in a slice or 3D view to place Seed Point {index}.")
 
     def _createDefaultSeedPoints(self) -> None:
         """Create default seed points if they don't exist."""
