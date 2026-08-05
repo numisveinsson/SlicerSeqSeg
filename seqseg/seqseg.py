@@ -173,9 +173,9 @@ class seqsegParameterNode:
     nnunetResultsPath: str = ""  # Path to nnUNet results folder
     nnunetType: Annotated[str, Choice(["3d_fullres", "2d"])] = "3d_fullres"  # Type of nnUNet model
     trainDataset: Annotated[str, Choice(list(KNOWN_TRAIN_DATASETS))] = "Dataset005_SEQAORTANDFEMOMR"  # Training dataset name
-    fold: Annotated[str, Choice(["all", "0", "1", "2", "3", "4"])] = "all"  # Fold to use for nnUNet model
     outputDirectory: str = ""  # Directory for SeqSeg outputs (data_dir)
     outputSegmentation: str = ""  # Segmentation node ID
+    simvascular: bool = False  # SeqSeg -simvascular 0/1
 
 
 class InstallError(Exception):
@@ -308,12 +308,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             logging.warning("Could not connect scale combo box signal")
 
-        if hasattr(self.ui, "foldComboBox") and hasattr(self.ui.foldComboBox, "currentTextChanged"):
-            self.ui.foldComboBox.currentTextChanged.connect(self.onFoldChanged)
-            logging.info("Connected fold combo box signal")
-        else:
-            logging.warning("Could not connect fold combo box signal")
-
         # QSpinBox values are not always pushed to the parameter node by connectGui; sync explicitly.
         for spin_name, handler, label in (
             ("maxStepsSpinBox", self.onMaxStepsChanged, "Nr. of Steps"),
@@ -327,6 +321,15 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     logging.info(f"Connected {spin_name} ({label})")
                 except Exception as e:
                     logging.warning(f"Could not connect {spin_name}: {e}")
+
+        if hasattr(self.ui, "simvascularCheckBox"):
+            try:
+                self.ui.simvascularCheckBox.connect("toggled(bool)", self.onSimvascularChanged)
+                logging.info("Connected simvascularCheckBox")
+            except Exception as e:
+                logging.warning(f"Could not connect simvascularCheckBox: {e}")
+        else:
+            logging.warning("simvascularCheckBox not found in UI")
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -595,7 +598,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 except Exception as e:
                     logging.warning(f"Could not read max steps per branch from UI: {e}")
 
-            # Scale / fold: read from UI before run (connectGui may not update the parameter node).
+            # Scale: read from UI before run (connectGui may not update the parameter node).
             if hasattr(self.ui, "scaleComboBox"):
                 try:
                     ui_scale = self.ui.scaleComboBox.currentText
@@ -606,18 +609,13 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 except Exception as e:
                     logging.warning(f"Could not read Scale from UI: {e}")
 
-            if hasattr(self.ui, "foldComboBox"):
+            if hasattr(self.ui, "simvascularCheckBox"):
                 try:
-                    ui_fold = self.ui.foldComboBox.currentText
-                    _allowed_folds = frozenset({"all", "0", "1", "2", "3", "4"})
-                    if ui_fold in _allowed_folds:
-                        self._parameterNode.fold = ui_fold
-                    elif ui_fold:
-                        logging.warning(f"Fold '{ui_fold}' not in allowed list; keeping parameter node value")
+                    self._parameterNode.simvascular = bool(self.ui.simvascularCheckBox.checked)
                 except Exception as e:
-                    logging.warning(f"Could not read Fold from UI: {e}")
+                    logging.warning(f"Could not read SimVascular toggle from UI: {e}")
 
-            fold = self._parameterNode.fold
+            simvascular = bool(self._parameterNode.simvascular)
 
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
@@ -630,7 +628,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             
             logging.info(f"nnUNet Type (final): '{nnunetType}'")
             logging.info(f"Train Dataset: '{trainDataset}'")
-            logging.info(f"Fold: '{fold}'")
             logging.info(f"Nr. of Steps: {maxSteps}, Max branches: {maxBranches}, Max steps/branch: {maxStepsPerBranch}")
             outputDirectory = self._parameterNode.outputDirectory
             logging.info(f"Output directory from parameter node: '{outputDirectory}'")
@@ -673,7 +670,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                                maxSteps, maxBranches, maxStepsPerBranch,
                                imageUnit, self._parameterNode.scale, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
-                               fold, outputDirectory, outputSegmentationNode)
+                               outputDirectory, outputSegmentationNode, simvascular=simvascular)
                                    
             self._updateStatusMessage(
                 _("SeqSeg finished — segmentation loaded and overlaid on the input volume in slice views.")
@@ -740,12 +737,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._parameterNode.scale = scale
             logging.info(f"Scale updated to: {scale}")
 
-    def onFoldChanged(self, fold: str) -> None:
-        """Called when Fold combo box changes - sync with parameter node."""
-        if self._parameterNode and fold in ("all", "0", "1", "2", "3", "4"):
-            self._parameterNode.fold = fold
-            logging.info(f"Fold updated to: {fold}")
-
     def onMaxStepsChanged(self, value: int) -> None:
         if self._parameterNode is not None:
             self._parameterNode.maxSteps = int(value)
@@ -757,6 +748,10 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onMaxStepsPerBranchChanged(self, value: int) -> None:
         if self._parameterNode is not None:
             self._parameterNode.maxStepsPerBranch = int(value)
+
+    def onSimvascularChanged(self, checked: bool) -> None:
+        if self._parameterNode is not None:
+            self._parameterNode.simvascular = bool(checked)
 
     def _syncUiWithParameterNode(self) -> None:
         """Manually sync UI controls with parameter node values."""
@@ -853,21 +848,6 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except Exception as e:
                 logging.warning(f"Could not sync scale to UI: {e}")
 
-        # Sync fold combo box (backup for parameter binding)
-        if hasattr(self.ui, "foldComboBox") and self._parameterNode.fold:
-            try:
-                current_fold = self._parameterNode.fold
-                combo_box = self.ui.foldComboBox
-                if combo_box.currentText != current_fold:
-                    index = combo_box.findText(current_fold)
-                    if index >= 0:
-                        combo_box.setCurrentIndex(index)
-                        logging.info(f"Synced fold to UI: {current_fold}")
-                    else:
-                        logging.warning(f"Fold '{current_fold}' not found in combo box options")
-            except Exception as e:
-                logging.warning(f"Could not sync fold to UI: {e}")
-
         # Sync integer spin boxes when parameter node was restored or updated in code
         for attr, spin_name in (
             ("maxSteps", "maxStepsSpinBox"),
@@ -884,6 +864,16 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     logging.info(f"Synced {attr} to UI: {want}")
             except Exception as e:
                 logging.warning(f"Could not sync {attr} to UI: {e}")
+
+        if hasattr(self.ui, "simvascularCheckBox"):
+            try:
+                want = bool(self._parameterNode.simvascular)
+                checkbox = self.ui.simvascularCheckBox
+                if bool(checkbox.checked) != want:
+                    checkbox.setChecked(want)
+                    logging.info(f"Synced simvascular to UI: {want}")
+            except Exception as e:
+                logging.warning(f"Could not sync simvascular to UI: {e}")
 
         self._syncSeedPointSelectorsFromParameterNode()
 
@@ -1447,7 +1437,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         return seqsegParameterNode(super().getParameterNode())
 
     # Pin matches prior extension behavior (PyPI); installed with --no-deps then selective deps (TotalSegmentator-style).
-    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==1.0.8"
+    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==2.1"
 
     def pipInstallSelective(self, packageToInstall, installCommand, packagesToSkip):
         """Install a Python distribution without deps, strip skipped Requires-Dist lines, then pip-install remaining requires."""
@@ -1745,9 +1735,9 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                   nnunetResultsPath: str,
                   nnunetType: str,
                   trainDataset: str,
-                  fold: str,
                   outputDirectory: str,
                   outputSegmentationNode,
+                  simvascular: bool = False,
                   showResult: bool = True) -> None:
         """
         Run the SeqSeg segmentation algorithm using CLI interface.
@@ -1762,9 +1752,9 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         :param nnunetResultsPath: path to nnUNet results folder
         :param nnunetType: type of nnUNet model (3d_fullres or 2d)
         :param trainDataset: name of dataset used to train nnUNet
-        :param fold: which fold to use for nnUNet model
         :param outputDirectory: directory for SeqSeg outputs (data_dir)
         :param outputSegmentationNode: output segmentation node
+        :param simvascular: if True, pass -simvascular 1 to write SimVascular project layout
         :param showResult: show output segmentation in slice viewers
         """
 
@@ -1930,9 +1920,9 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             logging.info(f"nnUNet Results Path: '{nnunetResultsPath}'")
             logging.info(f"nnUNet Type: {nnunetType}")
             logging.info(f"Train Dataset: {trainDataset}")
-            logging.info(f"Fold: {fold}")
             logging.info(f"Data Directory: {data_dir}")
             logging.info(f"Output Directory: {output_dir}")
+            logging.info(f"SimVascular Output: {simvascular}")
             logging.info(f"Input File: {input_file}")
             logging.info(f"Seeds File: {seeds_file}")
             logging.info("========================")
@@ -1956,20 +1946,20 @@ nnUNet Configuration:
 Results Path: {nnunetResultsPath if nnunetResultsPath else 'NOT SET'}
 Type: {nnunetType}
 Dataset: {trainDataset}
-Fold: {fold}
 
-Output Directory: {data_dir}"""
+Output Directory: {data_dir}
+SimVascular Output: {'Yes' if simvascular else 'No'}"""
             
             slicer.util.infoDisplay(param_text, windowTitle="SeqSeg Parameters")
             
             # Prepare SeqSeg command arguments according to actual SeqSeg CLI
+            # Fold is omitted so SeqSeg uses its default ("all") and fold/checkpoint fallback search.
             seqseg_cmd = [
                 "seqseg",
                 "-data_dir", data_dir,
                 "-nnunet_results_path", nnunetResultsPath,
                 "-nnunet_type", nnunetType,
                 "-train_dataset", trainDataset,
-                "-fold", fold,
                 "-img_ext", ".nii.gz",
                 "-config_name", "aorta_tutorial",  # Default config name
                 "-outdir", output_dir,
@@ -1980,6 +1970,8 @@ Output Directory: {data_dir}"""
                 "-max_n_steps_per_branch", str(maxStepsPerBranch),
                 # "-write_steps", "1",
             ]
+            if simvascular:
+                seqseg_cmd.extend(["-simvascular", "1"])
             
             logging.info(f"Running SeqSeg command: {' '.join(seqseg_cmd)}")
             
@@ -2106,11 +2098,10 @@ class seqsegTest(ScriptedLoadableModuleTest):
             nnunetResultsPath = "/tmp/test_nnunet_results"  # Test path
             nnunetType = "3d_fullres"
             trainDataset = "Dataset005_SEQAORTANDFEMOMR"
-            fold = "all"
             outputDirectory = "/tmp/test_seqseg_output/"  # Test output directory
             logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                            maxSteps, 1, 20, imageUnit, "1", "LPS World", nnunetResultsPath, nnunetType, trainDataset, 
-                           fold, outputDirectory, outputSegmentation)
+                           outputDirectory, outputSegmentation)
             self.delayDisplay("SeqSeg algorithm completed successfully")
         except InstallError as e:
             logging.info(f"SeqSeg dependency setup failed or incomplete for testing: {e}")

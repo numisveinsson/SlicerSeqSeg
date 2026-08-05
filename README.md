@@ -41,7 +41,7 @@ The **SeqSeg Vessel Segmentation** module does **not** ship PyTorch or nnUNet wh
 
 1. Install **PyTorch** from Slicer Extensions and use it to provide **`torch` 2.2.2** / **`torchvision` 0.17.2** in Slicer’s Python. **`torch` must be pinned to `==2.2.2`** (with the matching **`torchvision==0.17.2`**)—other versions are not supported. In the **PyTorch Util** module set the requested version to **`2.2.2`** before installing, or install manually with **`torch==2.2.2`**.
 2. Install **NNUNet** from Slicer Extensions and use it to provide **`nnunetv2` 2.5.1** in Slicer’s Python.
-3. On first **Run SeqSeg**, the module may ask you to confirm installation of extra Python packages (network required). It installs the **`seqseg`** PyPI package (**`seqseg==1.0.8`**) using **`slicer.util.pip_install`**, first with **`--no-deps`**, then installs declared dependencies selectively—**skipping** packages that must stay under Slicer’s control (**SimpleITK**, **torch**, **torchvision**, **nnunetv2**, **requests**, **rt_utils**), same pattern as extensions such as **Total Segmentator**.
+3. On first **Run SeqSeg**, the module may ask you to confirm installation of extra Python packages (network required). It installs the **`seqseg`** PyPI package (**`seqseg==2.1`**) using **`slicer.util.pip_install`**, first with **`--no-deps`**, then installs declared dependencies selectively—**skipping** packages that must stay under Slicer’s control (**SimpleITK**, **torch**, **torchvision**, **nnunetv2**, **requests**, **rt_utils**), same pattern as extensions such as **Total Segmentator**.
 
 You may need to **restart Slicer** once after PyTorch or other packages are installed; follow any prompt the module shows.
 
@@ -54,7 +54,7 @@ Use the **Download Aorta Weights (CT/MR)** and **Download Coronary CT Weights** 
 Use **Slicer’s** Python interpreter, not your system `python`. Example (adjust path to your Slicer install):
 
 ```bash
-/path/to/Slicer-X.Y.Z/bin/PythonSlicer -m pip install seqseg==1.0.8
+/path/to/Slicer-X.Y.Z/bin/PythonSlicer -m pip install seqseg==2.1
 ```
 
 You still need the **PyTorch** and **Slicer NNUNet** extensions and their installers to provide **`torch`** and **`nnunetv2`** consistently.
@@ -98,7 +98,7 @@ Before **Run SeqSeg**, align **Inputs**, **Segmentation Limits**, and **nnUNet C
 - **Image Unit** = **mm** and **Scale** = **0.1**: the bundled deep-learning weights for this walkthrough were trained with **centimeter**–style image spacing; typical Slicer CT volumes (including CTA-cardio) use **millimeter** voxel spacing. Choosing **mm** for the image and **0.1** for **Scale** maps the volume to the physical scale the model expects. Wrong combinations here are a common cause of poor or misaligned results (the in-module Scale explanation under **nnUNet Configuration** describes the same rule in general form).
 - **nnUNet Type** = **2d**: use the **2D** model for **faster inference** while following the tutorial (especially on a laptop or for a first run). **3d_fullres** is available if you prefer the full-resolution 3D configuration and can accept longer run times.
 
-Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEMOCT`, **Fold** `all`, radius **10** (mm, same as volume unit), **Nr. of Steps** **2**) are reasonable starting points for this dataset; adjust if your machine or case needs it.
+Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEMOCT`, radius **10** (mm, same as volume unit), **Nr. of Steps** **2**) are reasonable starting points for this dataset; adjust if your machine or case needs it.
 
 ## Usage
 
@@ -121,7 +121,6 @@ Other fields in the screenshot (e.g. **Train Dataset** `Dataset006_SEQAORTANDFEM
      - **Advanced:** if you already have nnUNet results on disk, set **nnUNet Results Path** with the folder control instead of the buttons.
      - Choose nnUNet type (3d_fullres or 2d)
      - **Train Dataset** (dropdown): choose the dataset id that matches your weights—`Dataset005_SEQAORTANDFEMOMR` (aorta MR), `Dataset006_SEQAORTANDFEMOCT` (aorta CT), or `Dataset010_SEQCOROASOCACT` (coronary CT lumen). The aorta models (005 and 006) were trained with **cm-scale** voxel spacing; the coronary model (010) was trained with **mm-scale** spacing—align **Image Unit** (under **Inputs**) and **Scale** (**nnUNet Configuration**) with your volume and that training convention.
-     - Choose fold (usually "all" or specific fold number)
    - Create or select an output segmentation node
    - Click "Run SeqSeg"
 
@@ -146,7 +145,6 @@ This section opens **expanded** by default. **Pretrained weights are meant to be
   - **Download Coronary CT Weights** (button): One-click fetch of coronary CTA lumen weights (~2.7 MB) from [Zenodo](https://zenodo.org/records/19547894). Extracts beside your chosen parent as `nnUNet_results_coronary`. **Train Dataset** is set to `Dataset010_SEQCOROASOCACT` when you use this download (including when reusing an existing folder).
 - **nnUNet Type**: Type of nnUNet model (3d_fullres or 2d, default: 3d_fullres)
 - **Train Dataset** (dropdown): Fixed choices `Dataset005_SEQAORTANDFEMOMR` (aorta MR), `Dataset006_SEQAORTANDFEMOCT` (aorta CT), and `Dataset010_SEQCOROASOCACT` (coronary CT lumen). Must match the model tree under **nnUNet Results Path**. **Training units:** 005 and 006 were trained on **cm-scale** data; 010 was trained on **mm-scale** data (the module shows this hint under the dropdown).
-- **Fold**: Which fold to use for nnUNet model (all, 0, 1, 2, 3, 4, default: all)
 
 ### Output
 - **Output Segmentation**: Segmentation node where the result will be stored
@@ -191,7 +189,6 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
    - `-nnunet_results_path`: Path to trained nnUNet models
    - `-nnunet_type`: Model architecture (3d_fullres or 2d)
    - `-train_dataset`: Dataset name used for training
-   - `-fold`: Cross-validation fold
    - `-img_ext`: Image file extension (.nii.gz)
    - `-config_name`: Configuration name (default: global)
    - `-outdir`: Output directory for results
@@ -207,7 +204,7 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
 - **PyTorch / Slicer NNUNet missing**: Install both from **Extension Manager**, restart Slicer if prompted, then open **SeqSeg Vessel Segmentation** again.
 - **Dependency installation cancelled or failed**: Check the **Python Interactor** log for `pip` output. Confirm network access. Use the **PyTorch Util** module to fix **`torch`** versions if the error mentions an incompatible PyTorch build; use the **nnUNet** module from **Slicer NNUNet** if **`nnunetv2`** is missing or too old.
 - **Restart requested after install**: Complete any dependency dialog; restart Slicer when the module asks so newly installed packages load cleanly.
-- **"SeqSeg dependency installation failed"** or **`seqseg`** still missing**: Install **`seqseg==1.0.8`** with **`PythonSlicer -m pip`** ([Manual / advanced installation](#manual--advanced-installation)) after **`torch`** and **`nnunetv2`** are working via the extensions.
+- **"SeqSeg dependency installation failed"** or **`seqseg`** still missing**: Install **`seqseg==2.1`** with **`PythonSlicer -m pip`** ([Manual / advanced installation](#manual--advanced-installation)) after **`torch`** and **`nnunetv2`** are working via the extensions.
 - **"Seed point is not defined"**: Make sure both markups nodes contain at least one fiducial point.
 - **"SeqSeg execution failed"**: If you have not downloaded weights yet, use **Download Aorta Weights (CT/MR)** or **Download Coronary CT Weights** in the module first; otherwise confirm **nnUNet Results Path** points at the folder that contains the unpacked `nnUNet_results` tree and that the **Train Dataset** dropdown matches the model you installed.
 - **"No output segmentation file found"**: SeqSeg may have failed silently—check the Slicer console for detailed error messages.
@@ -220,7 +217,7 @@ The extension follows the [SeqSeg CLI interface](https://github.com/numisveinsso
 
 The underlying SeqSeg / nnUNet stack ultimately needs:
 1. **PyTorch** and **`nnunetv2`** managed through those Slicer extensions (not ad hoc system-wide pip alone).
-2. The **`seqseg`** Python package (**`seqseg==1.0.8`**) plus its remaining dependencies, installed via **`slicer.util.pip_install`** with selective skipping of Slicer-managed packages (see [First-time Python setup](#first-time-python-setup)).
+2. The **`seqseg`** Python package (**`seqseg==2.1`**) plus its remaining dependencies, installed via **`slicer.util.pip_install`** with selective skipping of Slicer-managed packages (see [First-time Python setup](#first-time-python-setup)).
 3. **Trained model files** on disk—the extension supplies these via **Download Aorta…** / **Download Coronary CT…** unless you point **nnUNet Results Path** at your own trained outputs (e.g., `Dataset005_SEQAORTANDFEMOMR`, `Dataset006_SEQAORTANDFEMOCT`, or `Dataset010_SEQCOROASOCACT` for coronary CT).
 4. For **custom** nnUNet layouts, the environment variables your setup expects; using the module’s **download buttons** covers the common case without manual variable tuning.
 5. Compatible image formats (NIfTI recommended).

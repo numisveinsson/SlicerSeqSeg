@@ -539,56 +539,6 @@
         </property>
        </widget>
       </item>
-      <item row="7" column="0">
-       <widget class="QLabel" name="foldLabel">
-        <property name="text">
-         <string>Fold:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="1">
-       <widget class="QComboBox" name="foldComboBox">
-        <property name="toolTip">
-         <string>Which fold to use for nnUNet model</string>
-        </property>
-        <property name="editable">
-         <bool>true</bool>
-        </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>fold</string>
-        </property>
-        <item>
-         <property name="text">
-          <string>all</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>0</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>1</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>2</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>3</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>4</string>
-         </property>
-        </item>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>
@@ -640,7 +590,30 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0" colspan="2">
+      <item row="2" column="0">
+       <widget class="QLabel" name="simvascularLabel">
+        <property name="text">
+         <string>SimVascular Output:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QCheckBox" name="simvascularCheckBox">
+        <property name="toolTip">
+         <string>If checked, SeqSeg writes a SimVascular project layout (simvascular/ dirs with .pth, .ctgr).</string>
+        </property>
+        <property name="text">
+         <string>Generate SimVascular project</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>simvascular</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
        <widget class="QLabel" name="visualizationLabel">
         <property name="text">
          <string>Visualization Results:</string>
@@ -661,7 +634,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0" colspan="2">
+      <item row="4" column="0" colspan="2">
        <layout class="QVBoxLayout" name="visualizationButtonsLayout">
         <item>
          <layout class="QHBoxLayout" name="primaryVisualizationLayout">
