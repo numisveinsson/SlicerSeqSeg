@@ -138,14 +138,41 @@ def registerSampleData():
 # seqsegParameterNode
 #
 
-# Train dataset ids exposed in the module UI (must match seqseg.ui trainDatasetComboBox items)
+# Train dataset ids passed to SeqSeg / nnUNet (stored on the parameter node).
+# The Train Dataset combo shows friendly labels; itemData holds these real ids.
 KNOWN_TRAIN_DATASETS = (
     "Dataset005_SEQAORTANDFEMOMR",
     "Dataset006_SEQAORTANDFEMOCT",
     "Dataset010_SEQCOROASOCACT",
     "Dataset091_VMR_FONTAN_003MR",
-    "Dataset090_VMR_FONTAN_ORIGMR"
+    "Dataset090_VMR_FONTAN_ORIGMR",
 )
+
+# User-facing labels for the Train Dataset / weights combo (id -> display text).
+TRAIN_DATASET_DISPLAY_NAMES = {
+    "Dataset005_SEQAORTANDFEMOMR": "Aorta MR",
+    "Dataset006_SEQAORTANDFEMOCT": "Aorta CT",
+    "Dataset010_SEQCOROASOCACT": "Coronary CT",
+    "Dataset091_VMR_FONTAN_003MR": "Fontan MR (003)",
+    "Dataset090_VMR_FONTAN_ORIGMR": "Fontan MR (orig)",
+}
+
+
+def train_dataset_display_name(dataset_id: str) -> str:
+    """Friendly label for a known train dataset id (falls back to the id)."""
+    return TRAIN_DATASET_DISPLAY_NAMES.get(dataset_id, dataset_id)
+
+
+def train_dataset_id_from_ui_value(value: str) -> Optional[str]:
+    """Resolve combo display text or a raw dataset id to a known train dataset id."""
+    if not value:
+        return None
+    if value in KNOWN_TRAIN_DATASETS:
+        return value
+    for dataset_id, label in TRAIN_DATASET_DISPLAY_NAMES.items():
+        if label == value:
+            return dataset_id
+    return None
 
 
 @parameterNodeWrapper
@@ -421,11 +448,11 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info(f"Using default output directory: {default_output_dir}")
 
     def _populateTrainDatasetComboFromKnown(self) -> None:
-        """Rebuild Train Dataset combo items from KNOWN_TRAIN_DATASETS.
+        """Rebuild Train Dataset combo with friendly labels; itemData stores real dataset ids.
 
-        Slicer's parameter node GUI connector treats the combo's items as the allowed Choice()
-        values. Scene MRML can restore trainDataset strings that are absent from an outdated
-        .ui file unless we sync items here before connectGui().
+        The parameter node still stores Dataset*_… ids (Choice / SeqSeg -train_dataset).
+        The combo is synced manually (no SlicerParameterName) so users see labels like
+        "Aorta CT" while runtime still receives Dataset006_SEQAORTANDFEMOCT.
         """
         if not getattr(self, "ui", None) or not hasattr(self.ui, "trainDatasetComboBox"):
             return
@@ -433,8 +460,38 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         combo.blockSignals(True)
         combo.clear()
         for ds in KNOWN_TRAIN_DATASETS:
-            combo.addItem(ds)
+            combo.addItem(train_dataset_display_name(ds), ds)
         combo.blockSignals(False)
+
+    def _trainDatasetIdFromCombo(self, combo=None) -> Optional[str]:
+        """Read the real train dataset id from the combo (itemData, then display text)."""
+        if combo is None:
+            if not getattr(self, "ui", None) or not hasattr(self.ui, "trainDatasetComboBox"):
+                return None
+            combo = self.ui.trainDatasetComboBox
+        data = combo.currentData
+        if isinstance(data, str) and data in KNOWN_TRAIN_DATASETS:
+            return data
+        return train_dataset_id_from_ui_value(combo.currentText)
+
+    def _setTrainDatasetComboToId(self, dataset_id: str) -> None:
+        """Select the combo row whose itemData matches dataset_id."""
+        if not getattr(self, "ui", None) or not hasattr(self.ui, "trainDatasetComboBox"):
+            return
+        if not dataset_id:
+            return
+        combo = self.ui.trainDatasetComboBox
+        for index in range(combo.count):
+            if combo.itemData(index) == dataset_id:
+                if combo.currentIndex != index:
+                    combo.setCurrentIndex(index)
+                return
+        label = train_dataset_display_name(dataset_id)
+        index = combo.findText(label)
+        if index < 0:
+            index = combo.findText(dataset_id)
+        if index >= 0 and combo.currentIndex != index:
+            combo.setCurrentIndex(index)
 
     def setParameterNode(self, inputParameterNode: Optional[seqsegParameterNode]) -> None:
         """
@@ -568,7 +625,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             if hasattr(self.ui, "trainDatasetComboBox"):
                 try:
-                    ui_train_ds = self.ui.trainDatasetComboBox.currentText
+                    ui_train_ds = self._trainDatasetIdFromCombo()
                     if ui_train_ds and ui_train_ds != trainDataset:
                         logging.info(f"Train Dataset mismatch - Parameter: '{trainDataset}', UI: '{ui_train_ds}'")
                         if ui_train_ds in KNOWN_TRAIN_DATASETS:
@@ -726,10 +783,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             logging.info(f"nnUNet Type updated to: {nnunet_type}")
 
     def onTrainDatasetChanged(self, train_dataset: str) -> None:
-        """Called when train dataset combo box changes - sync with parameter node."""
-        if self._parameterNode and train_dataset:
-            self._parameterNode.trainDataset = train_dataset
-            logging.info(f"Train Dataset updated to: {train_dataset}")
+        """Called when train dataset combo changes — map display label to real dataset id."""
+        if not self._parameterNode:
+            return
+        dataset_id = self._trainDatasetIdFromCombo()
+        if not dataset_id:
+            dataset_id = train_dataset_id_from_ui_value(train_dataset)
+        if dataset_id and dataset_id in KNOWN_TRAIN_DATASETS:
+            self._parameterNode.trainDataset = dataset_id
+            logging.info(
+                f"Train Dataset updated to: {dataset_id} "
+                f"({train_dataset_display_name(dataset_id)})"
+            )
 
     def onScaleChanged(self, scale: str) -> None:
         """Called when Scale combo box changes - sync with parameter node."""
@@ -815,16 +880,19 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except Exception as e:
                 logging.warning(f"Could not sync nnUNet type to UI: {e}")
 
-        # Sync train dataset combo box (backup for parameter binding)
+        # Sync train dataset combo box (friendly labels; parameter stores real ids)
         if hasattr(self.ui, 'trainDatasetComboBox') and self._parameterNode.trainDataset:
             try:
                 current_ds = self._parameterNode.trainDataset
                 combo_box = self.ui.trainDatasetComboBox
-                if combo_box.currentText != current_ds:
-                    index = combo_box.findText(current_ds)
-                    if index >= 0:
-                        combo_box.setCurrentIndex(index)
-                        logging.info(f"Synced train dataset to UI: {current_ds}")
+                selected_id = self._trainDatasetIdFromCombo(combo_box)
+                if selected_id != current_ds:
+                    self._setTrainDatasetComboToId(current_ds)
+                    if self._trainDatasetIdFromCombo(combo_box) == current_ds:
+                        logging.info(
+                            f"Synced train dataset to UI: {current_ds} "
+                            f"({train_dataset_display_name(current_ds)})"
+                        )
                     else:
                         logging.warning(
                             f"Train dataset '{current_ds}' not in combo options; "
@@ -1052,17 +1120,17 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
     def _prompt_aorta_train_dataset(self) -> Optional[str]:
-        """Ask MR vs CT dataset id for Aorta weights. Returns dataset string or None if cancelled."""
+        """Ask MR vs CT for Aorta weights. Returns real dataset id or None if cancelled."""
         items = [
-            "Dataset005_SEQAORTANDFEMOMR (MR)",
-            "Dataset006_SEQAORTANDFEMOCT (CT)",
+            train_dataset_display_name("Dataset005_SEQAORTANDFEMOMR"),
+            train_dataset_display_name("Dataset006_SEQAORTANDFEMOCT"),
         ]
         try:
             import qt
             choice, ok = qt.QInputDialog.getItem(
                 slicer.util.mainWindow(),
                 "Train dataset",
-                "Select Train Dataset for Aorta weights (CT/MR):",
+                "Select model weights for Aorta (MR or CT):",
                 items,
                 0,
                 False,
@@ -1073,7 +1141,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 choice, ok = QInputDialog.getItem(
                     slicer.util.mainWindow(),
                     "Train dataset",
-                    "Select Train Dataset for Aorta weights (CT/MR):",
+                    "Select model weights for Aorta (MR or CT):",
                     items,
                     0,
                     False,
@@ -1083,7 +1151,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 return None
         if not ok or not choice:
             return None
-        return choice.split(" ", 1)[0]
+        return train_dataset_id_from_ui_value(choice)
 
     def _sync_train_dataset_for_weights_profile(self, weights_profile: str, mode: str) -> str:
         """
@@ -1095,13 +1163,15 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         if weights_profile == "coronary":
             self._parameterNode.trainDataset = "Dataset010_SEQCOROASOCACT"
-            return "\n\nTrain Dataset set to Dataset010_SEQCOROASOCACT."
+            label = train_dataset_display_name("Dataset010_SEQCOROASOCACT")
+            return f"\n\nModel weights set to {label}."
         if weights_profile == "aorta" and mode == "fresh_download":
             chosen = self._prompt_aorta_train_dataset()
             if chosen:
                 self._parameterNode.trainDataset = chosen
-                return f"\n\nTrain Dataset set to {chosen}."
-            return "\n\nTrain Dataset unchanged (MR/CT selection cancelled)."
+                label = train_dataset_display_name(chosen)
+                return f"\n\nModel weights set to {label}."
+            return "\n\nModel weights unchanged (MR/CT selection cancelled)."
         return ""
 
     def _downloadNnunetWeightsFromZenodo(

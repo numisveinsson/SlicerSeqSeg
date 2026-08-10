@@ -392,7 +392,7 @@
            <string>Download Coronary Weights</string>
           </property>
           <property name="toolTip">
-           <string>One-click download: coronary CTA lumen weights from Zenodo (~2.7 MB). Choose a parent folder when asked; extracts to nnUNet_results_coronary; Train Dataset can be set to Dataset010_SEQCOROASOCACT.</string>
+           <string>One-click download: coronary CTA lumen weights from Zenodo (~2.7 MB). Choose a parent folder when asked; extracts to nnUNet_results_coronary; Model Weights can be set to Coronary CT.</string>
           </property>
          </widget>
         </item>
@@ -428,14 +428,14 @@
       <item row="3" column="0">
        <widget class="QLabel" name="trainDatasetLabel">
         <property name="text">
-         <string>Train Dataset:</string>
+         <string>Model Weights:</string>
         </property>
        </widget>
       </item>
       <item row="3" column="1">
        <widget class="QComboBox" name="trainDatasetComboBox">
         <property name="toolTip">
-         <string>Dataset id used to train the nnUNet weights (must match the weights under nnUNet Results Path). Training voxel spacing: Dataset005 and Dataset006 were trained in cm units; Dataset010 was trained in mm. Match Image Unit (under Inputs) and Scale (below) accordingly.</string>
+         <string>Pretrained model to use (must match the weights under nnUNet Results Path). Aorta MR/CT were trained in cm units; Coronary CT was trained in mm. Match Image Unit (under Inputs) and Scale (below) accordingly. The real nnUNet dataset id is applied automatically when running SeqSeg.</string>
         </property>
         <property name="sizeAdjustPolicy">
          <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
@@ -446,22 +446,19 @@
         <property name="editable">
          <bool>false</bool>
         </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>trainDataset</string>
-        </property>
         <item>
          <property name="text">
-          <string>Dataset005_SEQAORTANDFEMOMR</string>
+          <string>Aorta MR</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Dataset006_SEQAORTANDFEMOCT</string>
+          <string>Aorta CT</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>Dataset010_SEQCOROASOCACT</string>
+          <string>Coronary CT</string>
          </property>
         </item>
        </widget>
@@ -469,7 +466,7 @@
       <item row="4" column="0" colspan="2">
        <widget class="QLabel" name="trainDatasetUnitsHintLabel">
         <property name="text">
-         <string>Dataset005_SEQAORTANDFEMOMR and Dataset006_SEQAORTANDFEMOCT were trained on cm-scale data; Dataset010_SEQCOROASOCACT was trained on mm-scale data. Set Image Unit under Inputs and Scale below to match your volume and the model.</string>
+         <string>Aorta MR and Aorta CT were trained on cm-scale data; Coronary CT was trained on mm-scale data. Set Image Unit under Inputs and Scale below to match your volume and the model.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -738,7 +735,7 @@ QPushButton:disabled {
      <property name="text">
       <string>Quick start: load a volume, pick or Auto-Create Seeds (two fiducials), set radius, open nnUNet Configuration and click Download Aorta or Download Coronary CT Weights if you need models (buttons fetch and unpack weights—no manual training), set output folder, Run SeqSeg (vessel segmentation). Then use Load Segmentation / Load Surface Mesh / Browse All Output Files.
 
-Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After the download buttons finish, confirm Train Dataset (Aorta MR/CT is prompted; Coronary uses Dataset010_SEQCOROASOCACT). First run may install dependencies and take longer. Results live under output_directory/output/.</string>
+Details: NIfTI is recommended. Image unit (mm/cm) must match your volume. After the download buttons finish, confirm Model Weights (Aorta MR/CT is prompted; Coronary uses Coronary CT). First run may install dependencies and take longer. Results live under output_directory/output/.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
