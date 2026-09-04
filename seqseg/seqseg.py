@@ -1835,6 +1835,65 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             logging.error(f"Error loading segmentation file {segmentation_file_path}: {e}")
             return False
 
+    @staticmethod
+    def _combined_seqseg_log(result) -> str:
+        return "\n".join(part for part in (result.stdout, result.stderr) if part)
+
+    @staticmethod
+    def _seqseg_log_indicates_inference_failure(text: str) -> Optional[str]:
+        """Return a user-facing reason if SeqSeg exited 0 but tracking did not run."""
+        if not text:
+            return None
+        if "no kernel image is available for execution on the device" in text:
+            return (
+                "PyTorch CUDA cannot execute kernels on this GPU "
+                "(no kernel image is available for execution on the device). "
+                "The installed torch build does not match this GPU architecture. "
+                "Install a matching PyTorch CUDA wheel in PyTorch Util, or run on CPU."
+            )
+        if "Didnt work for first surface" in text and "Ratio of processed voxels: 0.00%" in text:
+            return (
+                "SeqSeg tracking produced no vessel (0.00% voxels processed); "
+                "the first surface prediction failed. Check GPU/CUDA compatibility, "
+                "seed placement, and that the selected model weights match the image."
+            )
+        return None
+
+    def _should_force_seqseg_cpu(self) -> bool:
+        """True when CUDA is advertised but a tiny kernel cannot run on the GPU."""
+        try:
+            import torch
+        except ImportError:
+            return False
+        if not torch.cuda.is_available():
+            return False
+        try:
+            sample = torch.zeros(8, device="cuda")
+            sample = (sample + 1) * 2
+            torch.cuda.synchronize()
+            _ = float(sample.sum().item())
+            return False
+        except Exception as error:
+            logging.warning(
+                "CUDA is available but a test kernel failed (%s). Forcing SeqSeg onto CPU.",
+                error,
+            )
+            return True
+
+    def _run_seqseg_cli(self, seqseg_cmd, cwd, env):
+        result = subprocess.run(
+            seqseg_cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env=env,
+        )
+        if result.stdout:
+            logging.info(f"SeqSeg output:\n{result.stdout}")
+        if result.stderr:
+            logging.info(f"SeqSeg stderr:\n{result.stderr}")
+        return result
+
     def runSeqSeg(self,
                   inputVolume: vtkMRMLScalarVolumeNode,
                   seedPoint1Node,
@@ -2088,23 +2147,43 @@ SimVascular Output: {'Yes' if simvascular else 'No'}"""
                 seqseg_cmd.extend(["-simvascular", "1"])
             
             logging.info(f"Running SeqSeg command: {' '.join(seqseg_cmd)}")
-            
-            # Run SeqSeg (run from data_dir)
-            result = subprocess.run(
-                seqseg_cmd, 
-                capture_output=True, 
-                text=True,
-                cwd=data_dir
+
+            run_env = os.environ.copy()
+            force_cpu = self._should_force_seqseg_cpu()
+            if force_cpu:
+                run_env["CUDA_VISIBLE_DEVICES"] = "-1"
+                logging.warning(
+                    "PyTorch CUDA is visible but cannot execute kernels on this GPU. "
+                    "Running SeqSeg on CPU (slower). To use the GPU, install a PyTorch "
+                    "build that matches this GPU architecture in the PyTorch Util module."
+                )
+
+            result = self._run_seqseg_cli(seqseg_cmd, cwd=data_dir, env=run_env)
+            failure_reason = self._seqseg_log_indicates_inference_failure(
+                self._combined_seqseg_log(result)
             )
-            
+            if failure_reason and not force_cpu:
+                logging.warning("%s Retrying SeqSeg on CPU.", failure_reason)
+                run_env["CUDA_VISIBLE_DEVICES"] = "-1"
+                force_cpu = True
+                result = self._run_seqseg_cli(seqseg_cmd, cwd=data_dir, env=run_env)
+                failure_reason = self._seqseg_log_indicates_inference_failure(
+                    self._combined_seqseg_log(result)
+                )
+
             if result.returncode != 0:
                 logging.error(f"SeqSeg failed with return code {result.returncode}")
                 logging.error(f"Error output: {result.stderr}")
                 raise RuntimeError(f"SeqSeg execution failed: {result.stderr}")
-            
-            logging.info("SeqSeg execution completed successfully")
-            logging.info(f"SeqSeg output: {result.stdout}")
-            
+
+            if failure_reason:
+                raise RuntimeError(failure_reason)
+
+            logging.info(
+                "SeqSeg execution completed successfully%s",
+                " (CPU)" if force_cpu else "",
+            )
+
             # Look for output segmentation file
             # SeqSeg typically outputs files with pattern: {case}_seg_containing_seeds_{steps}_steps.mha
             # or similar patterns with .mha or .nii.gz extensions
@@ -2123,6 +2202,11 @@ SimVascular Output: {'Yes' if simvascular else 'No'}"""
             output_files.sort(key=lambda f: os.path.getmtime(os.path.join(output_dir, f)), reverse=True)
             output_file = os.path.join(output_dir, output_files[0])
             logging.info(f"Found output file: {output_file}")
+            if maxSteps > 0 and re.search(r"_0_steps\.", os.path.basename(output_file)):
+                raise RuntimeError(
+                    "SeqSeg wrote a 0-step segmentation, so tracking never advanced from the seed. "
+                    "Check the SeqSeg log for CUDA/GPU errors, seed placement, and model weights."
+                )
             
             # Use the standardized loading method
             if not self.loadSegmentationToNode(output_file, outputSegmentationNode, inputVolume):
