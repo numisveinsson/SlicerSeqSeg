@@ -192,7 +192,7 @@ class seqsegParameterNode:
     seedPoint2: Optional[vtkMRMLMarkupsFiducialNode] = None
     radiusEstimate: Annotated[float, WithinRange(0.1, 30.0)] = 1.0  # Radius in mm
     maxSteps: Annotated[int, WithinRange(1, 10000)] = 1  # Max segmentation steps
-    maxBranches: Annotated[int, WithinRange(1, 50)] = 1  # Max number of branches
+    maxBranches: Annotated[int, WithinRange(1, 100)] = 1  # Max number of branches
     maxStepsPerBranch: Annotated[int, WithinRange(1, 1000)] = 20  # Max steps per branch
     imageUnit: Annotated[str, Choice(["cm", "mm"])] = "cm"  # Image unit (mm or cm); cm first — MRML/connectGui often defaults to first Choice()
     scale: Annotated[str, Choice(["0.1", "1", "10"])] = "1"  # SeqSeg -scale vs. nnUNet training units
@@ -457,6 +457,10 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not getattr(self, "ui", None) or not hasattr(self.ui, "trainDatasetComboBox"):
             return
         combo = self.ui.trainDatasetComboBox
+        expected = list(KNOWN_TRAIN_DATASETS)
+        current = [combo.itemData(i) for i in range(combo.count)]
+        if current == expected:
+            return
         combo.blockSignals(True)
         combo.clear()
         for ds in KNOWN_TRAIN_DATASETS:
@@ -507,9 +511,42 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._populateTrainDatasetComboFromKnown()
             # Note: in the .ui file, a Qt dynamic property called "SlicerParameterName" is set on each
             # ui element that needs connection.
-            self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
+            # connectGui rebuilds Choice combo boxes (clear + add first item). Extra
+            # currentTextChanged handlers in setup() would then overwrite the stored
+            # parameter with the first Choice value unless widget signals are blocked.
+            blocked = []
+            for widget in self._widgetsWithManualParameterHandlers():
+                blocked.append((widget, widget.signalsBlocked()))
+                widget.blockSignals(True)
+            try:
+                self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
+            finally:
+                for widget, was_blocked in blocked:
+                    widget.blockSignals(was_blocked)
             self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
             self._checkCanApply()
+
+    def _widgetsWithManualParameterHandlers(self):
+        """Widgets whose setup() signals write to the parameter node outside connectGui."""
+        names = (
+            "unitComboBox",
+            "nnunetTypeComboBox",
+            "trainDatasetComboBox",
+            "scaleComboBox",
+            "maxStepsSpinBox",
+            "maxBranchesSpinBox",
+            "maxStepsPerBranchSpinBox",
+            "simvascularCheckBox",
+            "radiusSliderWidget",
+        )
+        widgets = []
+        ui = getattr(self, "ui", None)
+        if ui is None:
+            return widgets
+        for name in names:
+            if hasattr(ui, name):
+                widgets.append(getattr(ui, name))
+        return widgets
 
     def _checkCanApply(self, caller=None, event=None) -> None:
         """Check if we can run SeqSeg and update UI accordingly."""
@@ -1582,16 +1619,23 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         def _torch_base_matches(version_str):
             return pkg_version.parse(version_str).base_version == requiredTorchVersion
 
-        if sys.platform == "darwin":
-            numpy_version_str = importlib.metadata.version("numpy")
-            if pkg_version.parse(numpy_version_str) >= pkg_version.parse("2.0.0"):
-                slicer.util.pip_install("numpy<2")
+        # torch 2.2.2 is built against NumPy 1.x; NumPy 2.x fails import with _ARRAY_API not found.
+        # Downgrade before torchInstalled() (which imports torch). Restart so the process unloads NumPy 2.
+        numpy_version_str = importlib.metadata.version("numpy")
+        if pkg_version.parse(numpy_version_str) >= pkg_version.parse("2.0.0"):
+            logging.info(_("Downgrading NumPy from {current} to <2 for PyTorch 2.2.2 compatibility...").format(current=numpy_version_str))
+            slicer.util.pip_install("numpy<2")
+            raise InstallError(
+                _("NumPy 2.x is incompatible with the required PyTorch 2.2.2. NumPy was downgraded to 1.x; restart Slicer and run SeqSeg again."),
+                restartRequired=True,
+            )
 
         packagesToSkip = [
             "SimpleITK",
             "torch",
             "torchvision",
             "nnunetv2",
+            "numpy",
             "requests",
             "rt_utils",
         ]
