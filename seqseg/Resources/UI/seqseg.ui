@@ -536,6 +536,29 @@
         </property>
        </widget>
       </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="forceCpuLabel">
+        <property name="text">
+         <string>Device:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="QCheckBox" name="forceCpuCheckBox">
+        <property name="toolTip">
+         <string>If checked, nnUNet inference runs on the CPU (adds -cpu to the SeqSeg command). Use this when there is no usable GPU, or when GPU runs fail with a CUDA error; inference is slower on the CPU.</string>
+        </property>
+        <property name="text">
+         <string>Force CPU (no GPU)</string>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>forceCpu</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

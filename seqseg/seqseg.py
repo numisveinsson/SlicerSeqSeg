@@ -203,6 +203,7 @@ class seqsegParameterNode:
     outputDirectory: str = ""  # Directory for SeqSeg outputs (data_dir)
     outputSegmentation: str = ""  # Segmentation node ID
     simvascular: bool = False  # SeqSeg -simvascular 0/1
+    forceCpu: bool = False  # SeqSeg -cpu (run nnUNet inference on the CPU)
 
 
 class InstallError(Exception):
@@ -349,14 +350,18 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 except Exception as e:
                     logging.warning(f"Could not connect {spin_name}: {e}")
 
-        if hasattr(self.ui, "simvascularCheckBox"):
-            try:
-                self.ui.simvascularCheckBox.connect("toggled(bool)", self.onSimvascularChanged)
-                logging.info("Connected simvascularCheckBox")
-            except Exception as e:
-                logging.warning(f"Could not connect simvascularCheckBox: {e}")
-        else:
-            logging.warning("simvascularCheckBox not found in UI")
+        for box_name, handler in (
+            ("simvascularCheckBox", self.onSimvascularChanged),
+            ("forceCpuCheckBox", self.onForceCpuChanged),
+        ):
+            if hasattr(self.ui, box_name):
+                try:
+                    getattr(self.ui, box_name).connect("toggled(bool)", handler)
+                    logging.info(f"Connected {box_name}")
+                except Exception as e:
+                    logging.warning(f"Could not connect {box_name}: {e}")
+            else:
+                logging.warning(f"{box_name} not found in UI")
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -537,6 +542,7 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             "maxBranchesSpinBox",
             "maxStepsPerBranchSpinBox",
             "simvascularCheckBox",
+            "forceCpuCheckBox",
             "radiusSliderWidget",
         )
         widgets = []
@@ -709,7 +715,14 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 except Exception as e:
                     logging.warning(f"Could not read SimVascular toggle from UI: {e}")
 
+            if hasattr(self.ui, "forceCpuCheckBox"):
+                try:
+                    self._parameterNode.forceCpu = bool(self.ui.forceCpuCheckBox.checked)
+                except Exception as e:
+                    logging.warning(f"Could not read Force CPU toggle from UI: {e}")
+
             simvascular = bool(self._parameterNode.simvascular)
+            forceCpu = bool(self._parameterNode.forceCpu)
 
             # Debug: Log image unit with extra details
             logging.info(f"Image Unit from parameter node: '{imageUnit}'")
@@ -764,7 +777,8 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.logic.runSeqSeg(inputVolume, seedPoint1Node, seedPoint2Node, radiusEstimate, 
                                maxSteps, maxBranches, maxStepsPerBranch,
                                imageUnit, self._parameterNode.scale, self._parameterNode.coordinateSystem, nnunetResultsPath, nnunetType, trainDataset, 
-                               outputDirectory, outputSegmentationNode, simvascular=simvascular)
+                               outputDirectory, outputSegmentationNode, simvascular=simvascular,
+                               forceCpu=forceCpu)
                                    
             self._updateStatusMessage(
                 _("SeqSeg finished — segmentation loaded and overlaid on the input volume in slice views.")
@@ -854,6 +868,10 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onSimvascularChanged(self, checked: bool) -> None:
         if self._parameterNode is not None:
             self._parameterNode.simvascular = bool(checked)
+
+    def onForceCpuChanged(self, checked: bool) -> None:
+        if self._parameterNode is not None:
+            self._parameterNode.forceCpu = bool(checked)
 
     def _syncUiWithParameterNode(self) -> None:
         """Manually sync UI controls with parameter node values."""
@@ -970,15 +988,20 @@ class seqsegWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             except Exception as e:
                 logging.warning(f"Could not sync {attr} to UI: {e}")
 
-        if hasattr(self.ui, "simvascularCheckBox"):
+        for box_name, attr in (
+            ("simvascularCheckBox", "simvascular"),
+            ("forceCpuCheckBox", "forceCpu"),
+        ):
+            if not hasattr(self.ui, box_name):
+                continue
             try:
-                want = bool(self._parameterNode.simvascular)
-                checkbox = self.ui.simvascularCheckBox
+                want = bool(getattr(self._parameterNode, attr))
+                checkbox = getattr(self.ui, box_name)
                 if bool(checkbox.checked) != want:
                     checkbox.setChecked(want)
-                    logging.info(f"Synced simvascular to UI: {want}")
+                    logging.info(f"Synced {attr} to UI: {want}")
             except Exception as e:
-                logging.warning(f"Could not sync simvascular to UI: {e}")
+                logging.warning(f"Could not sync {attr} to UI: {e}")
 
         self._syncSeedPointSelectorsFromParameterNode()
 
@@ -1543,8 +1566,9 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return seqsegParameterNode(super().getParameterNode())
 
-    # Pin matches prior extension behavior (PyPI); installed with --no-deps then selective deps (TotalSegmentator-style).
-    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==2.1"
+    # 2.1.1 is the first release whose device selection honors -cpu instead of always taking an
+    # unusable CUDA device. Installed with --no-deps then selective deps (TotalSegmentator-style).
+    SEQSEG_PYTHON_PACKAGE_SPECIFIER = "seqseg==2.1.1"
 
     def pipInstallSelective(self, packageToInstall, installCommand, packagesToSkip):
         """Install a Python distribution without deps, strip skipped Requires-Dist lines, then pip-install remaining requires."""
@@ -1880,13 +1904,13 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             )
             return True
 
-    def _run_seqseg_cli(self, seqseg_cmd, cwd, env):
+    def _run_seqseg_cli(self, seqseg_cmd, cwd):
+        logging.info(f"Running SeqSeg command: {' '.join(seqseg_cmd)}")
         result = subprocess.run(
             seqseg_cmd,
             capture_output=True,
             text=True,
             cwd=cwd,
-            env=env,
         )
         if result.stdout:
             logging.info(f"SeqSeg output:\n{result.stdout}")
@@ -1911,6 +1935,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
                   outputDirectory: str,
                   outputSegmentationNode,
                   simvascular: bool = False,
+                  forceCpu: bool = False,
                   showResult: bool = True) -> None:
         """
         Run the SeqSeg segmentation algorithm using CLI interface.
@@ -1928,6 +1953,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
         :param outputDirectory: directory for SeqSeg outputs (data_dir)
         :param outputSegmentationNode: output segmentation node
         :param simvascular: if True, pass -simvascular 1 to write SimVascular project layout
+        :param forceCpu: if True, pass -cpu so nnUNet inference runs on the CPU
         :param showResult: show output segmentation in slice viewers
         """
 
@@ -2096,6 +2122,7 @@ class seqsegLogic(ScriptedLoadableModuleLogic):
             logging.info(f"Data Directory: {data_dir}")
             logging.info(f"Output Directory: {output_dir}")
             logging.info(f"SimVascular Output: {simvascular}")
+            logging.info(f"Force CPU: {forceCpu}")
             logging.info(f"Input File: {input_file}")
             logging.info(f"Seeds File: {seeds_file}")
             logging.info("========================")
@@ -2121,7 +2148,8 @@ Type: {nnunetType}
 Dataset: {trainDataset}
 
 Output Directory: {data_dir}
-SimVascular Output: {'Yes' if simvascular else 'No'}"""
+SimVascular Output: {'Yes' if simvascular else 'No'}
+Force CPU: {'Yes' if forceCpu else 'No'}"""
             
             slicer.util.infoDisplay(param_text, windowTitle="SeqSeg Parameters")
             
@@ -2146,27 +2174,30 @@ SimVascular Output: {'Yes' if simvascular else 'No'}"""
             if simvascular:
                 seqseg_cmd.extend(["-simvascular", "1"])
             
-            logging.info(f"Running SeqSeg command: {' '.join(seqseg_cmd)}")
+            # seqseg >= 2.1.1 keeps nnU-Net off the GPU with -cpu; earlier versions always took an
+            # advertised CUDA device, even when no kernels were compiled for it.
+            cpu_cmd = [*seqseg_cmd, "-cpu"]
 
-            run_env = os.environ.copy()
-            force_cpu = self._should_force_seqseg_cpu()
-            if force_cpu:
-                run_env["CUDA_VISIBLE_DEVICES"] = "-1"
-                logging.warning(
-                    "PyTorch CUDA is visible but cannot execute kernels on this GPU. "
-                    "Running SeqSeg on CPU (slower). To use the GPU, install a PyTorch "
-                    "build that matches this GPU architecture in the PyTorch Util module."
-                )
+            if forceCpu:
+                force_cpu = True
+                logging.info("Force CPU is enabled, running SeqSeg with -cpu")
+            else:
+                force_cpu = self._should_force_seqseg_cpu()
+                if force_cpu:
+                    logging.warning(
+                        "PyTorch CUDA is visible but cannot execute kernels on this GPU. "
+                        "Running SeqSeg with -cpu (slower). To use the GPU, install a PyTorch "
+                        "build that matches this GPU architecture in the PyTorch Util module."
+                    )
 
-            result = self._run_seqseg_cli(seqseg_cmd, cwd=data_dir, env=run_env)
+            result = self._run_seqseg_cli(cpu_cmd if force_cpu else seqseg_cmd, cwd=data_dir)
             failure_reason = self._seqseg_log_indicates_inference_failure(
                 self._combined_seqseg_log(result)
             )
             if failure_reason and not force_cpu:
-                logging.warning("%s Retrying SeqSeg on CPU.", failure_reason)
-                run_env["CUDA_VISIBLE_DEVICES"] = "-1"
+                logging.warning("%s Retrying SeqSeg with -cpu.", failure_reason)
                 force_cpu = True
-                result = self._run_seqseg_cli(seqseg_cmd, cwd=data_dir, env=run_env)
+                result = self._run_seqseg_cli(cpu_cmd, cwd=data_dir)
                 failure_reason = self._seqseg_log_indicates_inference_failure(
                     self._combined_seqseg_log(result)
                 )
